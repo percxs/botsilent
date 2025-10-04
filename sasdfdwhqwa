@@ -1,16 +1,3 @@
-getgenv().Silent = {
-    ['Prediction'] = 0.0223,
-    ['FOV'] = 1000,
-    ['AimKey'] = 'c',
-    ['FOV Visible'] = false,
-    ['HitPart'] = "Head",
-    ['Closest Mode'] = false,
-
-
-    ['Anti Curve'] = { 
-        ['Enabled'] = false, ['Max Angle'] = 7.67, ['Visualize'] = false, ['Distance Threshold'] = 50, }
-}
-
 if getgenv().SilentAimInstance then
     if getgenv().SilentAimInstance.fov then
         getgenv().SilentAimInstance.fov:Remove()
