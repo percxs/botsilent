@@ -437,45 +437,66 @@ local function initializeAimAssist()
         return true
     end
     
-    Options.AimKey:OnClick(function()
-        if Options.AimKey.Mode ~= 'Toggle' then return end
+    local keyBeganConnection = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
         
-        if not AimAssistActive then
-            LockedTarget = findClosestTarget()
-            if LockedTarget then
-                AimAssistActive = true
-                if fov then
-                    fov:SetColor(Color3.fromRGB(255, 0, 0))
+        local aimKeyValue = Options.AimKey.Value
+        if not aimKeyValue then return end
+        
+        local keyCode = Enum.KeyCode[aimKeyValue]
+        if input.KeyCode == keyCode then
+            local keyMode = Options.AimKey.Mode
+            
+            if keyMode == 'Toggle' then
+                if not AimAssistActive then
+                    LockedTarget = findClosestTarget()
+                    if LockedTarget then
+                        AimAssistActive = true
+                        if fov then
+                            fov:SetColor(Color3.fromRGB(255, 0, 0))
+                        end
+                    end
+                else
+                    AimAssistActive = false
+                    LockedTarget = nil
+                    if fov then
+                        fov:SetColor(Color3.fromRGB(0, 255, 0))
+                    end
                 end
-            end
-        else
-            AimAssistActive = false
-            LockedTarget = nil
-            if fov then
-                fov:SetColor(Color3.fromRGB(0, 255, 0))
+            elseif keyMode == 'Hold' or keyMode == 'Always' then
+                LockedTarget = findClosestTarget()
+                if LockedTarget then
+                    AimAssistActive = true
+                    if fov then
+                        fov:SetColor(Color3.fromRGB(255, 0, 0))
+                    end
+                end
             end
         end
     end)
     
-    Options.AimKey:OnChanged(function()
-        if Options.AimKey.Mode == 'Toggle' then return end
+    local keyEndedConnection = UserInputService.InputEnded:Connect(function(input, gp)
+        if gp then return end
         
-        if Options.AimKey.Active then
-            LockedTarget = findClosestTarget()
-            if LockedTarget then
-                AimAssistActive = true
+        local aimKeyValue = Options.AimKey.Value
+        if not aimKeyValue then return end
+        
+        local keyCode = Enum.KeyCode[aimKeyValue]
+        if input.KeyCode == keyCode then
+            local keyMode = Options.AimKey.Mode
+            
+            if keyMode == 'Hold' then
+                AimAssistActive = false
+                LockedTarget = nil
                 if fov then
-                    fov:SetColor(Color3.fromRGB(255, 0, 0))
+                    fov:SetColor(Color3.fromRGB(0, 255, 0))
                 end
-            end
-        else
-            AimAssistActive = false
-            LockedTarget = nil
-            if fov then
-                fov:SetColor(Color3.fromRGB(0, 255, 0))
             end
         end
     end)
+    
+    table.insert(AimAssistInstance.connections, keyBeganConnection)
+    table.insert(AimAssistInstance.connections, keyEndedConnection)
     
     local aimConnection = RunService.RenderStepped:Connect(function(dt)
         if not AimAssistActive then return end
