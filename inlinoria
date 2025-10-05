@@ -90,7 +90,7 @@ RightGroupBox:AddSlider('XPrediction', {
     Text = 'X Prediction',
     Default = 0.0223,
     Min = 0,
-    Max = 0.1,
+    Max = 0.75,
     Rounding = 4,
     Tooltip = 'X-axis bullet prediction value'
 })
@@ -99,7 +99,7 @@ RightGroupBox:AddSlider('YPrediction', {
     Text = 'Y Prediction',
     Default = 0.0223,
     Min = 0,
-    Max = 0.1,
+    Max = 0.75,
     Rounding = 4,
     Tooltip = 'Y-axis bullet prediction value'
 })
