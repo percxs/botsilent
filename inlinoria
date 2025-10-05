@@ -239,6 +239,44 @@ local function getClosestPart(character)
     return closestPart
 end
 
+local function getClosestPartToCrosshair(character)
+    if not character then return nil end
+    
+    local parts = {}
+    local bodyParts = {
+        'Head', 'HumanoidRootPart',
+        'UpperTorso', 'LowerTorso',
+        'LeftUpperArm', 'RightUpperArm', 'LeftLowerArm', 'RightLowerArm',
+        'LeftUpperLeg', 'RightUpperLeg', 'LeftLowerLeg', 'RightLowerLeg',
+        'LeftFoot', 'RightFoot', 'LeftHand', 'RightHand'
+    }
+    
+    for _, partName in pairs(bodyParts) do
+        local part = character:FindFirstChild(partName)
+        if part then
+            table.insert(parts, part)
+        end
+    end
+    
+    local closestPart = nil
+    local closestAngle = math.huge
+    local camPos = Camera.CFrame.Position
+    local camLook = Camera.CFrame.LookVector
+    
+    for _, part in pairs(parts) do
+        local direction = (part.Position - camPos).Unit
+        local dot = camLook:Dot(direction)
+        local angle = math.acos(math.clamp(dot, -1, 1))
+        
+        if angle < closestAngle then
+            closestAngle = angle
+            closestPart = part
+        end
+    end
+    
+    return closestPart
+end
+
 local function isInAir(character)
     if not character or not character:FindFirstChild('HumanoidRootPart') then return false end
     local rootPart = character.HumanoidRootPart
@@ -471,7 +509,7 @@ local function initializeAimAssist()
         local targetPart = LockedTarget.targetPart
         
         if Toggles.ClosestMode.Value then
-            targetPart = getClosestPart(targetChar)
+            targetPart = getClosestPartToCrosshair(targetChar)
             if not targetPart then
                 local rootPart = targetChar:FindFirstChild('HumanoidRootPart')
                 targetPart = targetChar:FindFirstChild('Head') or rootPart
