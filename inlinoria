@@ -4,8 +4,10 @@ local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
 local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 
+local gameName = game:GetService('MarketplaceService'):GetProductInfo(game.PlaceId).Name
+
 local Window = Library:CreateWindow({
-    Title = 'Aim Assist',
+    Title = "z2v9's menu | " .. gameName,
     Center = true,
     AutoShow = true,
     TabPadding = 8,
@@ -33,6 +35,10 @@ local CoreGui = game:GetService('CoreGui')
 local AimAssistInstance = {}
 local fov = nil
 local LockedTarget = nil
+
+local SilentAimInstance = {}
+local silentFov = nil
+local silentTracer = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Enabled',
@@ -639,8 +645,173 @@ Toggles.AimAssistEnabled:OnChanged(function()
     end
 end)
 
+local function getSilentValidPlayers()
+    local validPlayers = {}
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChild('Humanoid')
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local targetPart = character:FindFirstChild(Options.SilentHitPart.Value) or character:FindFirstChild('Head') or rootPart
+                if targetPart then
+                    table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
+                end
+            end
+        end
+    end
+    
+    if Toggles.IncludeNPCs.Value then
+        local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+        if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+            local targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or dummy:FindFirstChild('Head') or dummy.HumanoidRootPart
+            if targetPart then
+                table.insert(validPlayers, { player = nil, character = dummy, targetPart = targetPart })
+            end
+        end
+    end
+    
+    return validPlayers
+end
+
+local function initializeSilentAim()
+    if SilentAimInstance.fov then
+        SilentAimInstance.fov:Remove()
+    end
+    if SilentAimInstance.tracer then
+        SilentAimInstance.tracer:Remove()
+    end
+    if SilentAimInstance.connections then
+        for _, connection in pairs(SilentAimInstance.connections) do
+            if connection and connection.Disconnect then
+                connection:Disconnect()
+            end
+        end
+    end
+    
+    SilentAimInstance = {}
+    
+    silentFov = createFovCircle()
+    silentFov:SetRadius(Options.SilentFOV.Value)
+    silentFov:SetColor(Color3.fromRGB(255, 255, 255))
+    silentFov:SetVisible(Toggles.SilentFOVVisible.Value)
+    silentFov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
+    SilentAimInstance.fov = silentFov
+    
+    if Drawing then
+        silentTracer = Drawing.new('Line')
+        silentTracer.Thickness = 1
+        silentTracer.Color = Color3.fromRGB(255, 255, 255)
+        silentTracer.Transparency = 1
+        silentTracer.Visible = false
+        SilentAimInstance.tracer = silentTracer
+    end
+    
+    SilentAimInstance.connections = {}
+    
+    local renderConnection = RunService.RenderStepped:Connect(function()
+        if silentFov then
+            silentFov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
+            silentFov:SetVisible(Toggles.SilentFOVVisible.Value)
+            silentFov:SetRadius(Options.SilentFOV.Value)
+        end
+    end)
+    
+    table.insert(SilentAimInstance.connections, renderConnection)
+    
+    local oldIndex
+    oldIndex = hookmetamethod(game, '__index', function(self, key)
+        if self == Mouse and key:lower() == 'hit' and Toggles.SilentAimEnabled.Value then
+            local target = nil
+            local targetPart = nil
+            
+            local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+            if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+                target = dummy
+                if Toggles.SilentClosestMode.Value then
+                    targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+                else
+                    targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+                end
+            else
+                local validPlayers = getSilentValidPlayers()
+                local closestDist = math.huge
+                
+                for _, playerData in pairs(validPlayers) do
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                        if dist < closestDist then
+                            closestDist = dist
+                            target = playerData.character
+                            targetPart = playerData.targetPart
+                        end
+                    end
+                end
+            end
+            
+            if target and targetPart then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                
+                if onScreen and dist <= Options.SilentFOV.Value then
+                    if Toggles.TargetTracer.Value and silentTracer then
+                        silentTracer.From = Vector2.new(Mouse.X, Mouse.Y)
+                        silentTracer.To = Vector2.new(screenPos.X, screenPos.Y)
+                        silentTracer.Visible = true
+                    end
+                    
+                    local xPred = Options.SilentXPrediction.Value
+                    local yPred = Options.SilentYPrediction.Value
+                    local zPred = xPred
+                    
+                    local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
+                    return predicted
+                else
+                    if silentTracer then
+                        silentTracer.Visible = false
+                    end
+                end
+            else
+                if silentTracer then
+                    silentTracer.Visible = false
+                end
+            end
+        end
+        return oldIndex(self, key)
+    end)
+    
+    SilentAimInstance.hook = oldIndex
+end
+
+Toggles.SilentAimEnabled:OnChanged(function()
+    if Toggles.SilentAimEnabled.Value then
+        initializeSilentAim()
+    else
+        if SilentAimInstance.fov then
+            SilentAimInstance.fov:Remove()
+        end
+        if SilentAimInstance.tracer then
+            SilentAimInstance.tracer:Remove()
+        end
+        if SilentAimInstance.connections then
+            for _, connection in pairs(SilentAimInstance.connections) do
+                if connection and connection.Disconnect then
+                    connection:Disconnect()
+                end
+            end
+        end
+        if SilentAimInstance.hook then
+            pcall(function()
+                hookmetamethod(game, '__index', SilentAimInstance.hook)
+            end)
+        end
+    end
+end)
+
 Library:SetWatermarkVisibility(true)
-Library:SetWatermark('Aim Assist | LinoriaLib')
+Library:SetWatermark("z2v9's menu | " .. gameName)
 
 Library:OnUnload(function()
     LockedTarget = nil
@@ -656,6 +827,24 @@ Library:OnUnload(function()
     end
     if AimAssistInstance and AimAssistInstance.hook then
         restoremetamethod(game, '__index', AimAssistInstance.hook)
+    end
+    if SilentAimInstance and SilentAimInstance.fov then
+        SilentAimInstance.fov:Remove()
+    end
+    if SilentAimInstance and SilentAimInstance.tracer then
+        SilentAimInstance.tracer:Remove()
+    end
+    if SilentAimInstance and SilentAimInstance.connections then
+        for _, connection in pairs(SilentAimInstance.connections) do
+            if connection and connection.Disconnect then
+                connection:Disconnect()
+            end
+        end
+    end
+    if SilentAimInstance and SilentAimInstance.hook then
+        pcall(function()
+            hookmetamethod(game, '__index', SilentAimInstance.hook)
+        end)
     end
     Library.Unloaded = true
 end)
