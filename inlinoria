@@ -32,6 +32,42 @@ local RunService = game:GetService('RunService')
 local UserInputService = game:GetService('UserInputService')
 local CoreGui = game:GetService('CoreGui')
 
+local function calculateFOVRadius(fovValue)
+    -- Convert FOV value to actual screen radius
+    -- FOV 1-90: Use proper angular calculation
+    -- FOV 90-1100: Use linear interpolation to full screen
+    
+    if fovValue <= 90 then
+        -- For small FOVs, use angular calculation for precision
+        local fovRadians = math.rad(fovValue)
+        local screenRadius = math.tan(fovRadians / 2) * Camera.ViewportSize.X / 2
+        return math.max(screenRadius, 1)
+    else
+        -- For large FOVs, interpolate between 90-degree radius and full screen
+        local fov90Radius = math.tan(math.rad(90) / 2) * Camera.ViewportSize.X / 2
+        local fullScreenRadius = Camera.ViewportSize.X / 2
+        
+        -- Linear interpolation from 90 to 1100
+        local normalizedLargeFOV = (fovValue - 90) / (1100 - 90)
+        local interpolatedRadius = fov90Radius + (fullScreenRadius - fov90Radius) * normalizedLargeFOV
+        
+        return math.max(interpolatedRadius, 1)
+    end
+end
+
+local function isTargetInFOV(targetPosition, fovValue)
+    -- Check if target is within FOV using screen distance
+    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPosition)
+    if not onScreen then return false end
+    
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
+    local distance = (mousePos - screenPos2D).Magnitude
+    
+    local maxDistance = calculateFOVRadius(fovValue)
+    return distance <= maxDistance
+end
+
 local AimAssistInstance = {}
 local fov = nil
 local LockedTarget = nil
@@ -58,8 +94,8 @@ Toggles.AimAssistEnabled:AddKeyPicker('AimKey', {
 LeftGroupBox:AddSlider('FOV', {
     Text = 'FOV',
     Default = 500,
-    Min = 100,
-    Max = 1000,
+    Min = 1,
+    Max = 1100,
     Rounding = 0,
     Tooltip = 'Field of view for target detection'
 })
@@ -91,7 +127,7 @@ LeftGroupBox:AddToggle('IncludeNPCs', {
 
 LeftGroupBox:AddToggle('WallCheck', {
     Text = 'Wall Check',
-    Default = false,
+    Default = true,
     Tooltip = 'Only target visible players, stop aiming when target goes behind wall'
 })
 
@@ -113,17 +149,11 @@ RightGroupBox:AddDropdown('TargetMode', {
     Tooltip = 'Auto = targets based on mouse/FOV | Target = requires key press'
 })
 
-RightGroupBox:AddToggle('TargetTracer', {
-    Text = 'Target Tracer',
-    Default = false,
-    Tooltip = 'Show line from mouse to target'
-})
-
 RightGroupBox:AddSlider('SilentFOV', {
     Text = 'FOV',
     Default = 1000,
-    Min = 100,
-    Max = 2000,
+    Min = 1,
+    Max = 1100,
     Rounding = 0,
     Tooltip = 'Field of view for silent aim'
 })
@@ -217,7 +247,7 @@ LeftGroupBox2:AddSlider('YPrediction', {
 
 LeftGroupBox3:AddSlider('XSmoothing', {
     Text = 'X Smoothing',
-    Default = 0.5,
+    Default = 0.07,
     Min = 0.01,
     Max = 1,
     Rounding = 2,
@@ -226,7 +256,7 @@ LeftGroupBox3:AddSlider('XSmoothing', {
 
 LeftGroupBox3:AddSlider('YSmoothing', {
     Text = 'Y Smoothing',
-    Default = 0.5,
+    Default = 0.07,
     Min = 0.01,
     Max = 1,
     Rounding = 2,
@@ -240,6 +270,7 @@ LeftGroupBox3:AddSlider('YSmoothing', {
 -- removed humanizer controls
 
 -- removed humanizer samples
+
 
 local function resolveGuiParent()
     local ok, hui = pcall(function()
@@ -297,6 +328,69 @@ local function createFovCircle()
         end
         function wrapper:SetPosition(v2)
             frame.Position = UDim2.fromOffset(v2.X, v2.Y)
+        end
+        function wrapper:SetVisible(v)
+            frame.Visible = v
+        end
+        function wrapper:SetColor(c)
+            stroke.Color = c
+        end
+        function wrapper:Remove()
+            if gui then gui:Destroy() end
+        end
+        return wrapper
+    end
+end
+
+local function createSilentFovCircle()
+    local wrapper = {}
+    if Drawing then
+        local circle = Drawing.new('Circle')
+        circle.Thickness = 1
+        circle.Filled = false
+        circle.Transparency = 1
+        function wrapper:SetRadius(r)
+            circle.Radius = calculateFOVRadius(r)
+        end
+        function wrapper:SetPosition(v2)
+            local mousePos = UserInputService:GetMouseLocation()
+            circle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        end
+        function wrapper:SetVisible(v)
+            circle.Visible = v
+        end
+        function wrapper:SetColor(c)
+            circle.Color = c
+        end
+        function wrapper:Remove()
+            if circle then circle:Remove() end
+        end
+        return wrapper
+    else
+        local gui = Instance.new('ScreenGui')
+        gui.IgnoreGuiInset = true
+        gui.ResetOnSpawn = false
+        gui.Name = 'SilentAimFOV'
+        gui.Parent = resolveGuiParent()
+        local frame = Instance.new('Frame')
+        frame.BackgroundTransparency = 1
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Size = UDim2.fromOffset(0, 0)
+        frame.Position = UDim2.fromOffset(0, 0)
+        frame.Parent = gui
+        local stroke = Instance.new('UIStroke')
+        stroke.Thickness = 1
+        stroke.Parent = frame
+        local corner = Instance.new('UICorner')
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = frame
+        function wrapper:SetRadius(r)
+            local radius = calculateFOVRadius(r)
+            frame.Size = UDim2.fromOffset(radius * 2, radius * 2)
+        end
+        function wrapper:SetPosition(v2)
+            local mousePos = UserInputService:GetMouseLocation()
+            frame.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
         end
         function wrapper:SetVisible(v)
             frame.Visible = v
@@ -469,7 +563,7 @@ local function initializeAimAssist()
     
     AimAssistInstance = {}
     
-    fov = createFovCircle()
+    fov = createSilentFovCircle()
     fov:SetRadius(Options.FOV.Value)
     fov:SetColor(Color3.fromRGB(0, 255, 0))
     fov:SetVisible(Toggles.FOVVisible.Value)
@@ -509,13 +603,17 @@ local function initializeAimAssist()
         local fovValue = Options.FOV.Value
         
         for _, playerData in pairs(validPlayers) do
-            local targetPart = playerData.targetPart
-            local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-            if onScreen then
-                local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < closestDist and dist <= fovValue then
-                    closestDist = dist
-                    bestTarget = playerData
+            if isTargetInFOV(playerData.targetPart.Position, fovValue) then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                if onScreen then
+                    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                    local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
+                    local dist = (mousePos - screenPos2D).Magnitude
+                    
+                    if dist < closestDist then
+                        closestDist = dist
+                        bestTarget = playerData
+                    end
                 end
             end
         end
@@ -735,31 +833,90 @@ local function initializeSilentAim()
     
     SilentAimInstance = {}
     
-    silentFov = createFovCircle()
+    silentFov = createSilentFovCircle()
     silentFov:SetRadius(Options.SilentFOV.Value)
     silentFov:SetColor(Color3.fromRGB(255, 255, 255))
     silentFov:SetVisible(Toggles.SilentFOVVisible.Value)
     silentFov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
     SilentAimInstance.fov = silentFov
     
-    if Drawing then
-        silentTracer = Drawing.new('Line')
-        silentTracer.Thickness = 1
-        silentTracer.Color = Color3.fromRGB(255, 255, 255)
-        silentTracer.Transparency = 1
-        silentTracer.Visible = false
-        SilentAimInstance.tracer = silentTracer
-    end
+    silentTracer = nil
+    SilentAimInstance.tracer = nil
     
     SilentAimInstance.connections = {}
     
+    local function getSilentKeyState()
+        local mode = Options.SilentAimKey.Mode
+        local key = Options.SilentAimKey.Value
+        
+        if mode == 'Always' then
+            return true
+        elseif mode == 'Hold' then
+            if key == 'None' then return false end
+            
+            if key == 'MB1' or key == 'MB2' then
+                return key == 'MB1' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+                    or key == 'MB2' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            else
+                return UserInputService:IsKeyDown(Enum.KeyCode[key])
+            end
+        else
+            return Options.SilentAimKey.Toggled or false
+        end
+    end
+    
+    local function findSilentTarget()
+        local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+        if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+            local targetPart = nil
+            if Toggles.SilentClosestMode.Value then
+                targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            else
+                targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            end
+            if targetPart then
+                if isTargetInFOV(targetPart.Position, Options.SilentFOV.Value) then
+                    return { character = dummy, targetPart = targetPart }
+                end
+            end
+        end
+        
+        local validPlayers = getSilentValidPlayers()
+        local closestDist = math.huge
+        local bestTarget = nil
+        
+        for _, playerData in pairs(validPlayers) do
+            if isTargetInFOV(playerData.targetPart.Position, Options.SilentFOV.Value) then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                if onScreen then
+                    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                    local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
+                    local dist = (mousePos - screenPos2D).Magnitude
+                    
+                    if dist < closestDist then
+                        closestDist = dist
+                        bestTarget = playerData
+                    end
+                end
+            end
+        end
+        
+        return bestTarget
+    end
+    
     local lastPrintTime = 0
+    local lastFOVRadius = Options.SilentFOV.Value
     
     local renderConnection = RunService.RenderStepped:Connect(function()
         if silentFov then
             silentFov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
             silentFov:SetVisible(Toggles.SilentFOVVisible.Value)
-            silentFov:SetRadius(Options.SilentFOV.Value)
+            
+            local currentRadius = Options.SilentFOV.Value
+            if currentRadius ~= lastFOVRadius then
+                silentFov:SetRadius(currentRadius)
+                lastFOVRadius = currentRadius
+            end
         end
         
         if Toggles.VisualizeAntiCurve.Value and Toggles.SilentAimEnabled.Value then
@@ -820,58 +977,6 @@ local function initializeSilentAim()
     
     table.insert(SilentAimInstance.connections, renderConnection)
     
-    local function findSilentTarget()
-        local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
-        if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-            local targetPart = nil
-            if Toggles.SilentClosestMode.Value then
-                targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
-            else
-                targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
-            end
-            if targetPart then
-                return { character = dummy, targetPart = targetPart }
-            end
-        end
-        
-        local validPlayers = getSilentValidPlayers()
-        local closestDist = math.huge
-        local bestTarget = nil
-        
-        for _, playerData in pairs(validPlayers) do
-            local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
-            if onScreen then
-                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < closestDist and dist <= Options.SilentFOV.Value then
-                    closestDist = dist
-                    bestTarget = playerData
-                end
-            end
-        end
-        
-        return bestTarget
-    end
-    
-    local function getSilentKeyState()
-        local mode = Options.SilentAimKey.Mode
-        local key = Options.SilentAimKey.Value
-        
-        if mode == 'Always' then
-            return true
-        elseif mode == 'Hold' then
-            if key == 'None' then return false end
-            
-            if key == 'MB1' or key == 'MB2' then
-                return key == 'MB1' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-                    or key == 'MB2' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-            else
-                return UserInputService:IsKeyDown(Enum.KeyCode[key])
-            end
-        else
-            return Options.SilentAimKey.Toggled or false
-        end
-    end
-    
     local lastSilentKeyState = false
     
     local keyUpdateConnection = RunService.RenderStepped:Connect(function()
@@ -904,75 +1009,56 @@ local function initializeSilentAim()
                 end
             elseif Options.TargetMode.Value == 'Target' then
                 if SilentLockedTarget then
-                    target = SilentLockedTarget.character
-                    targetPart = SilentLockedTarget.targetPart
-                    
-                    if Toggles.SilentClosestMode.Value then
-                        targetPart = getClosestPart(target)
-                        if not targetPart then
-                            local rootPart = target:FindFirstChild('HumanoidRootPart')
-                            targetPart = target:FindFirstChild('Head') or rootPart
+                    if isTargetInFOV(SilentLockedTarget.targetPart.Position, Options.SilentFOV.Value) then
+                            target = SilentLockedTarget.character
+                            targetPart = SilentLockedTarget.targetPart
+                            
+                            if Toggles.SilentClosestMode.Value then
+                                targetPart = getClosestPart(target)
+                                if not targetPart then
+                                    local rootPart = target:FindFirstChild('HumanoidRootPart')
+                                    targetPart = target:FindFirstChild('Head') or rootPart
+                                end
+                            end
                         end
                     end
                 end
             end
             
             if target and targetPart then
-                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                local xPred = Options.SilentXPrediction.Value
+                local yPred = Options.SilentYPrediction.Value
+                local zPred = xPred
                 
-                if onScreen then
-                    if Toggles.TargetTracer.Value and silentTracer then
-                        silentTracer.From = Vector2.new(Mouse.X, Mouse.Y)
-                        silentTracer.To = Vector2.new(screenPos.X, screenPos.Y)
-                        silentTracer.Visible = true
+                local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
+                
+                if Toggles.AntiCurveEnabled.Value then
+                    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                    local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
+                    local crosshairDir = crosshairRay.Direction
+                    
+                    local dot = crosshairDir:Dot(targetDir)
+                    local angle = math.acos(math.clamp(dot, -1, 1))
+                    local angleDeg = math.deg(angle)
+                    
+                    local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                    local dist = (targetPart.Position - charPos).Magnitude
+                    
+                    if Toggles.VisualizeAntiCurve.Value then
+                        print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, Options.MaxAngle.Value, tostring(angleDeg <= Options.MaxAngle.Value)))
                     end
                     
-                    local xPred = Options.SilentXPrediction.Value
-                    local yPred = Options.SilentYPrediction.Value
-                    local zPred = xPred
-                    
-                    local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
-                    
-                    if Toggles.AntiCurveEnabled.Value then
-                        local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-                        local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
-                        local crosshairDir = crosshairRay.Direction
-                        
-                        local dot = crosshairDir:Dot(targetDir)
-                        local angle = math.acos(math.clamp(dot, -1, 1))
-                        local angleDeg = math.deg(angle)
-                        
-                        local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
-                        local dist = (targetPart.Position - charPos).Magnitude
-                        
-                        if Toggles.VisualizeAntiCurve.Value then
-                            print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, Options.MaxAngle.Value, tostring(angleDeg <= Options.MaxAngle.Value)))
+                    if angleDeg <= Options.MaxAngle.Value then
+                        if dist <= Options.DistanceThreshold.Value then
+                            local curvedPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
+                            return CFrame.new(curvedPos)
+                        else
+                            return CFrame.new(predicted.Position)
                         end
-                        
-                        if angleDeg <= Options.MaxAngle.Value then
-                            if dist <= Options.DistanceThreshold.Value then
-                                local curvedPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
-                                return CFrame.new(curvedPos)
-                            else
-                                return CFrame.new(predicted.Position)
-                            end
-                        end
-                    else
-                        return CFrame.new(predicted.Position)
                     end
                 else
-                    if silentTracer then
-                        silentTracer.Visible = false
-                    end
+                    return CFrame.new(predicted.Position)
                 end
-            else
-                if silentTracer then
-                    silentTracer.Visible = false
-                end
-            end
-        else
-            if silentTracer then
-                silentTracer.Visible = false
             end
         end
         return oldIndex(self, key)
@@ -1060,7 +1146,3 @@ SaveManager:SetFolder('AimAssistScript/game')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
-
-
--- loadstring(game:HttpGet('https://raw.githubusercontent.com/percxs/botsilent/refs/heads/main/inlinoria'))()
-    
