@@ -110,19 +110,19 @@ RightGroupBox:AddSlider('YPrediction', {
 SmoothingGroupBox:AddSlider('XSmoothing', {
     Text = 'X Smoothing',
     Default = 0.5,
-    Min = 0.1,
+    Min = 0.01,
     Max = 1,
     Rounding = 2,
-    Tooltip = '1.0 = sharpest, 0.1 = smoothest'
+    Tooltip = '1.0 = sharpest, 0.01 = smoothest'
 })
 
 SmoothingGroupBox:AddSlider('YSmoothing', {
     Text = 'Y Smoothing',
     Default = 0.5,
-    Min = 0.1,
+    Min = 0.01,
     Max = 1,
     Rounding = 2,
-    Tooltip = '1.0 = sharpest, 0.1 = smoothest'
+    Tooltip = '1.0 = sharpest, 0.01 = smoothest'
 })
 
 -- removed ZSmoothing
