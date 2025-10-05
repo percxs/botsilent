@@ -29,6 +29,7 @@ local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService('RunService')
 local UserInputService = game:GetService('UserInputService')
+local CoreGui = game:GetService('CoreGui')
 
 local AimAssistInstance = {}
 local AimAssistEnabled = false
@@ -210,6 +211,66 @@ local samples = {
     {0.8, -1.0}, {-0.9, -0.9}, {1.2, 0.3}, {-0.3, 1.3}
 }
 
+local function createFovCircle()
+    local wrapper = {}
+    if Drawing then
+        local circle = Drawing.new('Circle')
+        circle.Thickness = 1
+        circle.Filled = false
+        circle.Transparency = 1
+        function wrapper:SetRadius(r)
+            circle.Radius = r
+        end
+        function wrapper:SetPosition(v2)
+            circle.Position = v2
+        end
+        function wrapper:SetVisible(v)
+            circle.Visible = v
+        end
+        function wrapper:SetColor(c)
+            circle.Color = c
+        end
+        function wrapper:Remove()
+            if circle then circle:Remove() end
+        end
+        return wrapper
+    else
+        local gui = Instance.new('ScreenGui')
+        gui.IgnoreGuiInset = true
+        gui.ResetOnSpawn = false
+        gui.Name = 'AimAssistFOV'
+        gui.Parent = CoreGui
+        local frame = Instance.new('Frame')
+        frame.BackgroundTransparency = 1
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Size = UDim2.fromOffset(0, 0)
+        frame.Position = UDim2.fromOffset(0, 0)
+        frame.Parent = gui
+        local stroke = Instance.new('UIStroke')
+        stroke.Thickness = 1
+        stroke.Parent = frame
+        local corner = Instance.new('UICorner')
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = frame
+        function wrapper:SetRadius(r)
+            frame.Size = UDim2.fromOffset(r * 2, r * 2)
+        end
+        function wrapper:SetPosition(v2)
+            frame.Position = UDim2.fromOffset(v2.X, v2.Y)
+        end
+        function wrapper:SetVisible(v)
+            frame.Visible = v
+        end
+        function wrapper:SetColor(c)
+            stroke.Color = c
+        end
+        function wrapper:Remove()
+            if gui then gui:Destroy() end
+        end
+        return wrapper
+    end
+end
+
 local function getClosestPart(character)
     if not character then return nil end
     
@@ -260,12 +321,13 @@ end
 
 local function getValidPlayers()
     local validPlayers = {}
+    local seen = {}
+    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             local rootPart = character:FindFirstChild('HumanoidRootPart')
-            
             if humanoid and rootPart and humanoid.Health > 0 then
                 local targetPart = nil
                 if Toggles.ClosestMode.Value then
@@ -273,33 +335,32 @@ local function getValidPlayers()
                 else
                     targetPart = character:FindFirstChild(Options.HitPart.Value) or (character:FindFirstChild('Head') or rootPart)
                 end
-                
                 if targetPart then
-                    table.insert(validPlayers, {
-                        player = player,
-                        character = character,
-                        targetPart = targetPart
-                    })
+                    table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
+                    seen[character] = true
                 end
             end
         end
     end
     
-    local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
-    if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-        local targetPart = nil
-        if Toggles.ClosestMode.Value then
-            targetPart = getClosestPart(dummy) or (dummy.Head or dummy.HumanoidRootPart)
-        else
-            targetPart = dummy:FindFirstChild(Options.HitPart.Value) or (dummy.Head or dummy.HumanoidRootPart)
-        end
-        
-        if targetPart then
-            table.insert(validPlayers, {
-                player = nil,
-                character = dummy,
-                targetPart = targetPart
-            })
+    for _, inst in ipairs(workspace:GetDescendants()) do
+        if inst:IsA('Model') and not seen[inst] then
+            local humanoid = inst:FindFirstChildOfClass('Humanoid')
+            local rootPart = inst:FindFirstChild('HumanoidRootPart')
+            if humanoid and rootPart and humanoid.Health > 0 then
+                if not (LocalPlayer.Character and inst == LocalPlayer.Character) then
+                    local targetPart = nil
+                    if Toggles.ClosestMode.Value then
+                        targetPart = getClosestPart(inst) or (inst:FindFirstChild('Head') or rootPart)
+                    else
+                        targetPart = inst:FindFirstChild(Options.HitPart.Value) or (inst:FindFirstChild('Head') or rootPart)
+                    end
+                    if targetPart then
+                        table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
+                        seen[inst] = true
+                    end
+                end
+            end
         end
     end
     
@@ -320,28 +381,20 @@ local function initializeAimAssist()
     
     AimAssistInstance = {}
     
-    if Drawing then
-        fov = Drawing.new('Circle')
-        fov.Thickness = 1
-        fov.Radius = Options.FOV.Value
-        fov.Color = Color3.fromRGB(0, 255, 0)
-        fov.Filled = false
-        fov.Transparency = 1
-        fov.Visible = Toggles.FOVVisible.Value
-        fov.Position = Vector2.new(Mouse.X, Mouse.Y)
-        AimAssistInstance.fov = fov
-    else
-        fov = nil
-        AimAssistInstance.fov = nil
-    end
+    fov = createFovCircle()
+    fov:SetRadius(Options.FOV.Value)
+    fov:SetColor(Color3.fromRGB(255, 0, 0))
+    fov:SetVisible(Toggles.FOVVisible.Value)
+    fov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
+    AimAssistInstance.fov = fov
     
     AimAssistInstance.connections = {}
     
     local renderConnection = RunService.RenderStepped:Connect(function()
         if fov then
-            fov.Position = Vector2.new(Mouse.X, Mouse.Y)
-            fov.Visible = Toggles.FOVVisible.Value
-            fov.Radius = Options.FOV.Value
+            fov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
+            fov:SetVisible(Toggles.FOVVisible.Value)
+            fov:SetRadius(Options.FOV.Value)
         end
     end)
     
@@ -351,7 +404,7 @@ local function initializeAimAssist()
         if key:lower() == Options.AimKey.Value:lower() then
             AimAssistEnabled = not AimAssistEnabled
             if fov then
-                fov.Color = AimAssistEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                fov:SetColor(AimAssistEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
             end
         end
     end)
@@ -377,7 +430,7 @@ local function initializeAimAssist()
     table.insert(AimAssistInstance.connections, inputEndedConnection)
 
     local aimConnection = RunService.Heartbeat:Connect(function(dt)
-        if not (Toggles.AimAssistEnabled.Value and (AimAssistEnabled or AimHold)) then return end
+        if not (AimAssistEnabled or AimHold) then return end
         
         local validPlayers = getValidPlayers()
         local closestDist = math.huge
@@ -397,6 +450,9 @@ local function initializeAimAssist()
         end
         
         if bestPart then
+            if Camera.CameraType ~= Enum.CameraType.Scriptable then
+                Camera.CameraType = Enum.CameraType.Scriptable
+            end
             local inAir = isInAir(bestCharacter)
             local xPred = Options.XPrediction.Value
             local yPred = inAir and Options.YPrediction.Value or Options.XPrediction.Value
@@ -415,6 +471,10 @@ local function initializeAimAssist()
             local alpha = math.clamp(dt * (10 / math.max(0.001, avgSmooth)), 0, 1)
             
             Camera.CFrame = Camera.CFrame:Lerp(desired, alpha)
+        else
+            if Camera.CameraType ~= Enum.CameraType.Custom then
+                Camera.CameraType = Enum.CameraType.Custom
+            end
         end
     end)
     
