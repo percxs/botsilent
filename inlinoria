@@ -420,28 +420,23 @@ local function initializeAimAssist()
         return true
     end
     
-    local keyConnection = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode[Options.AimKey.Value] then
-            if not AimAssistActive then
-                LockedTarget = findClosestTarget()
-                if LockedTarget then
-                    AimAssistActive = true
-                    if fov then
-                        fov:SetColor(Color3.fromRGB(255, 0, 0))
-                    end
-                end
-            else
-                AimAssistActive = false
-                LockedTarget = nil
+    Options.AimKey:OnClick(function()
+        if not AimAssistActive then
+            LockedTarget = findClosestTarget()
+            if LockedTarget then
+                AimAssistActive = true
                 if fov then
-                    fov:SetColor(Color3.fromRGB(0, 255, 0))
+                    fov:SetColor(Color3.fromRGB(255, 0, 0))
                 end
+            end
+        else
+            AimAssistActive = false
+            LockedTarget = nil
+            if fov then
+                fov:SetColor(Color3.fromRGB(0, 255, 0))
             end
         end
     end)
-    
-    table.insert(AimAssistInstance.connections, keyConnection)
     
     local aimConnection = RunService.RenderStepped:Connect(function(dt)
         if not AimAssistActive then return end
