@@ -18,8 +18,8 @@ local Tabs = {
 }
 
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
-local RightGroupBox = Tabs.Main:AddRightGroupbox('Prediction')
-local SmoothingGroupBox = Tabs.Main:AddLeftGroupbox('Smoothing')
+local PredictionGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist Prediction')
+local SmoothingGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist Smoothing')
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
@@ -86,7 +86,7 @@ LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
     NoUI = false,
 })
 
-RightGroupBox:AddSlider('XPrediction', {
+PredictionGroupBox:AddSlider('XPrediction', {
     Text = 'X Prediction',
     Default = 0.0223,
     Min = 0,
@@ -95,7 +95,7 @@ RightGroupBox:AddSlider('XPrediction', {
     Tooltip = 'X-axis bullet prediction value'
 })
 
-RightGroupBox:AddSlider('YPrediction', {
+PredictionGroupBox:AddSlider('YPrediction', {
     Text = 'Y Prediction',
     Default = 0.0223,
     Min = 0,
