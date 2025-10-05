@@ -365,8 +365,10 @@ local function getValidPlayers()
                         else
                             targetPart = inst:FindFirstChild(hitPartValue) or (inst:FindFirstChild('Head') or rootPart)
                         end
-                        if targetPart and isVisible(targetPart, inst) then
-                            table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
+                        if targetPart then
+                            if not Toggles.WallCheck.Value or isVisible(targetPart, inst) then
+                                table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
+                            end
                         end
                     end
                 end
