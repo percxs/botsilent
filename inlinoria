@@ -351,11 +351,17 @@ local function getValidPlayers()
     end
     
     if Toggles.IncludeNPCs.Value then
-        local botNames = {['Dummy'] = true, ['NPC'] = true, ['Target'] = true}
-        
-        local function scanForBots(parent)
-            for _, inst in ipairs(parent:GetChildren()) do
-                if inst:IsA('Model') and inst ~= LocalPlayer.Character and botNames[inst.Name] then
+        for _, inst in ipairs(workspace:GetDescendants()) do
+            if inst:IsA('Model') and inst ~= LocalPlayer.Character then
+                local isPlayer = false
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player.Character == inst then
+                        isPlayer = true
+                        break
+                    end
+                end
+                
+                if not isPlayer then
                     local humanoid = inst:FindFirstChildOfClass('Humanoid')
                     local rootPart = inst:FindFirstChild('HumanoidRootPart')
                     if humanoid and rootPart and humanoid.Health > 0 then
@@ -374,13 +380,6 @@ local function getValidPlayers()
                 end
             end
         end
-        
-        local botsFolder = workspace:FindFirstChild('Bots')
-        if botsFolder then
-            scanForBots(botsFolder)
-        end
-        
-        scanForBots(workspace)
     end
     
     return validPlayers
