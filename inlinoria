@@ -37,6 +37,8 @@ local function calculateFOVRadius(fovValue)
     -- FOV 1-90: Use proper angular calculation
     -- FOV 90-1100: Use linear interpolation to full screen
     
+    if not fovValue or fovValue <= 0 then return 1 end
+    
     if fovValue <= 90 then
         -- For small FOVs, use angular calculation for precision
         local fovRadians = math.rad(fovValue)
@@ -57,6 +59,8 @@ end
 
 local function isTargetInFOV(targetPosition, fovValue)
     -- Check if target is within FOV using screen distance
+    if not targetPosition or not fovValue or fovValue <= 0 then return false end
+    
     local screenPos, onScreen = Camera:WorldToScreenPoint(targetPosition)
     if not onScreen then return false end
     
@@ -600,9 +604,9 @@ local function initializeAimAssist()
         local closestDist = math.huge
         local bestTarget = nil
         local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-        local fovValue = Options.FOV.Value
         
         for _, playerData in pairs(validPlayers) do
+            local fovValue = Options.FOV and Options.FOV.Value or 500
             if isTargetInFOV(playerData.targetPart.Position, fovValue) then
                 local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
                 if onScreen then
@@ -875,7 +879,8 @@ local function initializeSilentAim()
                 targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
             end
             if targetPart then
-                if isTargetInFOV(targetPart.Position, Options.SilentFOV.Value) then
+                local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+                if isTargetInFOV(targetPart.Position, fovValue) then
                     return { character = dummy, targetPart = targetPart }
                 end
             end
@@ -886,7 +891,8 @@ local function initializeSilentAim()
         local bestTarget = nil
         
         for _, playerData in pairs(validPlayers) do
-            if isTargetInFOV(playerData.targetPart.Position, Options.SilentFOV.Value) then
+            local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+            if isTargetInFOV(playerData.targetPart.Position, fovValue) then
                 local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
                 if onScreen then
                     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
@@ -1009,7 +1015,8 @@ local function initializeSilentAim()
                 end
             elseif Options.TargetMode.Value == 'Target' then
                 if SilentLockedTarget then
-                    if isTargetInFOV(SilentLockedTarget.targetPart.Position, Options.SilentFOV.Value) then
+                    local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+                    if isTargetInFOV(SilentLockedTarget.targetPart.Position, fovValue) then
                             target = SilentLockedTarget.character
                             targetPart = SilentLockedTarget.targetPart
                             
