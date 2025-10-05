@@ -20,7 +20,7 @@ local Tabs = {
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
 local RightGroupBox = Tabs.Main:AddRightGroupbox('Prediction')
 local SmoothingGroupBox = Tabs.Main:AddLeftGroupbox('Smoothing')
-local LegitGroupBox = Tabs.Main:AddRightGroupbox('Legit')
+local EasingGroupBox = Tabs.Main:AddRightGroupbox('Easing')
 local HumanizerGroupBox = Tabs.Main:AddLeftGroupbox('Humanizer')
 
 local Players = game:GetService('Players')
@@ -128,41 +128,25 @@ SmoothingGroupBox:AddSlider('ZSmoothing', {
     Tooltip = 'Z-axis smoothing strength'
 })
 
-LegitGroupBox:AddDropdown('EasingStyle', {
-    Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
-    Default = 1,
-    Text = 'Easing Style',
-    Tooltip = 'Easing animation style'
-})
-
-LegitGroupBox:AddDropdown('EasingDirection', {
+EasingGroupBox:AddDropdown('EasingDirection', {
     Values = {'In', 'Out', 'InOut'},
     Default = 1,
     Text = 'Easing Direction',
     Tooltip = 'Easing direction'
 })
 
-LegitGroupBox:AddDropdown('FirstEasing', {
+EasingGroupBox:AddDropdown('FirstEasing', {
     Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
     Default = 1,
     Text = 'First Easing',
     Tooltip = 'How the aim assist starts'
 })
 
-LegitGroupBox:AddDropdown('SecondEasing', {
+EasingGroupBox:AddDropdown('SecondEasing', {
     Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
     Default = 1,
     Text = 'Second Easing',
     Tooltip = 'How the aim assist ends'
-})
-
-LegitGroupBox:AddSlider('LegitSmoothing', {
-    Text = 'Legit Smoothing',
-    Default = 1,
-    Min = 0.1,
-    Max = 5,
-    Rounding = 1,
-    Tooltip = 'Smoothing for legit mode'
 })
 
 HumanizerGroupBox:AddSlider('Sample1', {
