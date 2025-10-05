@@ -39,6 +39,7 @@ local LockedTarget = nil
 local SilentAimInstance = {}
 local silentFov = nil
 local silentTracer = nil
+local SilentLockedTarget = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Enabled',
@@ -645,6 +646,42 @@ Toggles.AimAssistEnabled:OnChanged(function()
     end
 end)
 
+local function applyAntiCurve(targetPosition, cameraPosition)
+    if not Toggles.AntiCurveEnabled.Value then
+        return targetPosition
+    end
+    
+    local maxAngle = math.rad(Options.MaxAngle.Value)
+    local distance = (targetPosition - cameraPosition).Magnitude
+    
+    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+    local targetDirection = (targetPosition - cameraPosition).Unit
+    local crosshairDirection = crosshairRay.Direction
+    
+    local dotProduct = crosshairDirection:Dot(targetDirection)
+    local actualAngle = math.acos(math.clamp(dotProduct, -1, 1))
+    local actualAngleDegrees = math.deg(actualAngle)
+    
+    if actualAngleDegrees <= Options.MaxAngle.Value then
+        if distance <= Options.DistanceThreshold.Value then
+            if math.random() < 0.3 then
+                local randomAngleX = (math.random() - 0.5) * maxAngle
+                local randomAngleY = (math.random() - 0.5) * maxAngle
+                
+                local rightVector = Camera.CFrame.RightVector
+                local upVector = Camera.CFrame.UpVector
+                
+                local offsetX = rightVector * math.sin(randomAngleX) * distance * 0.1
+                local offsetY = upVector * math.sin(randomAngleY) * distance * 0.1
+                
+                return targetPosition + offsetX + offsetY
+            end
+        end
+    end
+    
+    return targetPosition
+end
+
 local function getSilentValidPlayers()
     local validPlayers = {}
     
@@ -720,32 +757,98 @@ local function initializeSilentAim()
     
     table.insert(SilentAimInstance.connections, renderConnection)
     
+    local function findSilentTarget()
+        local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+        if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+            local targetPart = nil
+            if Toggles.SilentClosestMode.Value then
+                targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            else
+                targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            end
+            if targetPart then
+                return { character = dummy, targetPart = targetPart }
+            end
+        end
+        
+        local validPlayers = getSilentValidPlayers()
+        local closestDist = math.huge
+        local bestTarget = nil
+        
+        for _, playerData in pairs(validPlayers) do
+            local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+            if onScreen then
+                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                if dist < closestDist and dist <= Options.SilentFOV.Value then
+                    closestDist = dist
+                    bestTarget = playerData
+                end
+            end
+        end
+        
+        return bestTarget
+    end
+    
+    local function getSilentKeyState()
+        local mode = Options.SilentAimKey.Mode
+        local key = Options.SilentAimKey.Value
+        
+        if mode == 'Always' then
+            return true
+        elseif mode == 'Hold' then
+            if key == 'None' then return false end
+            
+            if key == 'MB1' or key == 'MB2' then
+                return key == 'MB1' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+                    or key == 'MB2' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            else
+                return UserInputService:IsKeyDown(Enum.KeyCode[key])
+            end
+        else
+            return Options.SilentAimKey.Toggled or false
+        end
+    end
+    
+    local lastSilentKeyState = false
+    
+    local keyUpdateConnection = RunService.RenderStepped:Connect(function()
+        if Options.TargetMode.Value == 'Target' then
+            local keyActive = getSilentKeyState()
+            
+            if keyActive and not lastSilentKeyState then
+                SilentLockedTarget = findSilentTarget()
+            elseif not keyActive and lastSilentKeyState then
+                SilentLockedTarget = nil
+            end
+            
+            lastSilentKeyState = keyActive
+        end
+    end)
+    
+    table.insert(SilentAimInstance.connections, keyUpdateConnection)
+    
     local oldIndex
     oldIndex = hookmetamethod(game, '__index', function(self, key)
         if self == Mouse and key:lower() == 'hit' and Toggles.SilentAimEnabled.Value then
             local target = nil
             local targetPart = nil
             
-            local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
-            if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-                target = dummy
-                if Toggles.SilentClosestMode.Value then
-                    targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
-                else
-                    targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            if Options.TargetMode.Value == 'Auto' then
+                target = findSilentTarget()
+                if target then
+                    targetPart = target.targetPart
+                    target = target.character
                 end
-            else
-                local validPlayers = getSilentValidPlayers()
-                local closestDist = math.huge
-                
-                for _, playerData in pairs(validPlayers) do
-                    local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                        if dist < closestDist then
-                            closestDist = dist
-                            target = playerData.character
-                            targetPart = playerData.targetPart
+            elseif Options.TargetMode.Value == 'Target' then
+                if SilentLockedTarget then
+                    target = SilentLockedTarget.character
+                    targetPart = SilentLockedTarget.targetPart
+                    
+                    if Toggles.SilentClosestMode.Value then
+                        targetPart = getClosestPart(target)
+                        if not targetPart then
+                            local rootPart = target:FindFirstChild('HumanoidRootPart')
+                            targetPart = target:FindFirstChild('Head') or rootPart
                         end
                     end
                 end
@@ -753,9 +856,8 @@ local function initializeSilentAim()
             
             if target and targetPart then
                 local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
                 
-                if onScreen and dist <= Options.SilentFOV.Value then
+                if onScreen then
                     if Toggles.TargetTracer.Value and silentTracer then
                         silentTracer.From = Vector2.new(Mouse.X, Mouse.Y)
                         silentTracer.To = Vector2.new(screenPos.X, screenPos.Y)
@@ -767,7 +869,8 @@ local function initializeSilentAim()
                     local zPred = xPred
                     
                     local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
-                    return predicted
+                    local finalPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
+                    return CFrame.new(finalPos)
                 else
                     if silentTracer then
                         silentTracer.Visible = false
@@ -777,6 +880,10 @@ local function initializeSilentAim()
                 if silentTracer then
                     silentTracer.Visible = false
                 end
+            end
+        else
+            if silentTracer then
+                silentTracer.Visible = false
             end
         end
         return oldIndex(self, key)
