@@ -18,8 +18,8 @@ local Tabs = {
 }
 
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
-local PredictionGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist Prediction')
-local SmoothingGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist Smoothing')
+local LeftGroupBox2 = Tabs.Main:AddLeftGroupbox('Aim Assist Prediction')
+local LeftGroupBox3 = Tabs.Main:AddLeftGroupbox('Aim Assist Smoothing')
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
@@ -34,9 +34,14 @@ local fov = nil
 local LockedTarget = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
-    Text = 'Aim Assist',
+    Text = 'Enabled',
     Default = false,
     Tooltip = 'Enable/disable aim assist functionality'
+}):AddKeyPicker('AimKey', {
+    Default = 'C',
+    Mode = 'Toggle',
+    Text = 'Aim Assist Keybind',
+    NoUI = false,
 })
 
 LeftGroupBox:AddSlider('FOV', {
@@ -46,6 +51,12 @@ LeftGroupBox:AddSlider('FOV', {
     Max = 1000,
     Rounding = 0,
     Tooltip = 'Field of view for target detection'
+})
+
+LeftGroupBox:AddToggle('FOVVisible', {
+    Text = 'FOV Visible',
+    Default = false,
+    Tooltip = 'Show FOV circle'
 })
 
 LeftGroupBox:AddDropdown('HitPart', {
@@ -61,12 +72,6 @@ LeftGroupBox:AddToggle('ClosestMode', {
     Tooltip = 'Target closest body part instead of specific part'
 })
 
-LeftGroupBox:AddToggle('FOVVisible', {
-    Text = 'FOV Visible',
-    Default = false,
-    Tooltip = 'Show FOV circle'
-})
-
 LeftGroupBox:AddToggle('IncludeNPCs', {
     Text = 'Include NPCs',
     Default = true,
@@ -79,14 +84,37 @@ LeftGroupBox:AddToggle('WallCheck', {
     Tooltip = 'Only target visible players, stop aiming when target goes behind wall'
 })
 
-LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
-    Default = 'C',
-    Mode = 'Toggle',
-    Text = 'Aim Assist Keybind',
-    NoUI = false,
+LeftGroupBox:AddToggle('AntiCurveEnabled', {
+    Text = 'Anti Curve',
+    Default = false,
+    Tooltip = 'Enable anti-curve / resolver functionality'
 })
 
-PredictionGroupBox:AddSlider('XPrediction', {
+LeftGroupBox:AddSlider('MaxAngle', {
+    Text = 'Max Angle',
+    Default = 7.67,
+    Min = 0,
+    Max = 45,
+    Rounding = 2,
+    Tooltip = 'Maximum angle for anti-curve'
+})
+
+LeftGroupBox:AddSlider('DistanceThreshold', {
+    Text = 'Distance Threshold',
+    Default = 50,
+    Min = 10,
+    Max = 200,
+    Rounding = 0,
+    Tooltip = 'Distance threshold for anti-curve activation'
+})
+
+LeftGroupBox:AddToggle('VisualizeAntiCurve', {
+    Text = 'Visualize Anti Curve',
+    Default = false,
+    Tooltip = 'Show anti-curve debug information'
+})
+
+LeftGroupBox2:AddSlider('XPrediction', {
     Text = 'X Prediction',
     Default = 0.0223,
     Min = 0,
@@ -95,7 +123,7 @@ PredictionGroupBox:AddSlider('XPrediction', {
     Tooltip = 'X-axis bullet prediction value'
 })
 
-PredictionGroupBox:AddSlider('YPrediction', {
+LeftGroupBox2:AddSlider('YPrediction', {
     Text = 'Y Prediction',
     Default = 0.0223,
     Min = 0,
@@ -106,7 +134,7 @@ PredictionGroupBox:AddSlider('YPrediction', {
 
 -- removed ZPrediction
 
-SmoothingGroupBox:AddSlider('XSmoothing', {
+LeftGroupBox3:AddSlider('XSmoothing', {
     Text = 'X Smoothing',
     Default = 0.5,
     Min = 0.01,
@@ -115,7 +143,7 @@ SmoothingGroupBox:AddSlider('XSmoothing', {
     Tooltip = '1.0 = sharpest, 0.01 = smoothest'
 })
 
-SmoothingGroupBox:AddSlider('YSmoothing', {
+LeftGroupBox3:AddSlider('YSmoothing', {
     Text = 'Y Smoothing',
     Default = 0.5,
     Min = 0.01,
