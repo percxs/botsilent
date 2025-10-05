@@ -73,6 +73,12 @@ LeftGroupBox:AddToggle('IncludeNPCs', {
     Tooltip = 'Target NPCs/bots (may reduce performance)'
 })
 
+LeftGroupBox:AddToggle('WallCheck', {
+    Text = 'Wall Check',
+    Default = true,
+    Tooltip = 'Only target visible players, stop aiming when target goes behind wall'
+})
+
 LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
     Default = 'C',
     Mode = 'Toggle',
@@ -238,6 +244,43 @@ local function isInAir(character)
     return raycast == nil
 end
 
+local function isVisible(targetPart, targetCharacter)
+    if not Toggles.WallCheck.Value then return true end
+    if not targetPart or not targetCharacter then return false end
+    
+    local origin = Camera.CFrame.Position
+    local direction = (targetPart.Position - origin)
+    local distance = direction.Magnitude
+    direction = direction.Unit
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character, targetCharacter}
+    rayParams.IgnoreWater = true
+    
+    local rayResult = workspace:Raycast(origin, direction * distance, rayParams)
+    
+    if not rayResult then
+        return true
+    end
+    
+    if rayResult.Instance then
+        local hitParent = rayResult.Instance.Parent
+        if hitParent == targetCharacter or rayResult.Instance == targetPart then
+            return true
+        end
+        
+        if hitParent and hitParent:IsA('Accessory') then
+            local accessoryParent = hitParent.Parent
+            if accessoryParent == targetCharacter then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
 -- removed humanizer logic
 
 local function getValidPlayers()
@@ -257,7 +300,7 @@ local function getValidPlayers()
                 else
                     targetPart = character:FindFirstChild(hitPartValue) or (character:FindFirstChild('Head') or rootPart)
                 end
-                if targetPart then
+                if targetPart and isVisible(targetPart, character) then
                     table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
                 end
             end
@@ -284,7 +327,7 @@ local function getValidPlayers()
                         else
                             targetPart = inst:FindFirstChild(hitPartValue) or (inst:FindFirstChild('Head') or rootPart)
                         end
-                        if targetPart then
+                        if targetPart and isVisible(targetPart, inst) then
                             table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
                         end
                     end
@@ -352,26 +395,8 @@ local function initializeAimAssist()
     
     table.insert(AimAssistInstance.connections, keyConnection)
     
-    local AimHold = false
-    local inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-            AimHold = true
-        end
-    end)
-    
-    local inputEndedConnection = UserInputService.InputEnded:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-            AimHold = false
-        end
-    end)
-    
-    table.insert(AimAssistInstance.connections, inputBeganConnection)
-    table.insert(AimAssistInstance.connections, inputEndedConnection)
-    
-    local aimConnection = RunService.RenderStepped:Connect(function()
-        if not (AimAssistEnabled or AimHold) then return end
+    local aimConnection = RunService.Heartbeat:Connect(function()
+        if not AimAssistEnabled then return end
         
         local validPlayers = getValidPlayers()
         if #validPlayers == 0 then return end
@@ -403,12 +428,21 @@ local function initializeAimAssist()
             local velocity = bestPart.AssemblyLinearVelocity
             local predictedPos = bestPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
             
-            local currentCam = Camera.CFrame
-            local desired = CFrame.new(currentCam.Position, predictedPos)
-            local avgSmooth = (Options.XSmoothing.Value + Options.YSmoothing.Value) * 0.5
-            local smoothFactor = 1 / math.max(0.1, avgSmooth)
+            local screenPos = Camera:WorldToScreenPoint(predictedPos)
+            local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
             
-            Camera.CFrame = currentCam:Lerp(desired, smoothFactor)
+            local deltaX = targetScreenPos.X - mousePos.X
+            local deltaY = targetScreenPos.Y - mousePos.Y
+            
+            local xSmooth = Options.XSmoothing.Value
+            local ySmooth = Options.YSmoothing.Value
+            
+            local moveX = deltaX / math.max(0.1, xSmooth)
+            local moveY = deltaY / math.max(0.1, ySmooth)
+            
+            if mousemoverel then
+                mousemoverel(moveX, moveY)
+            end
         end
     end)
     
@@ -472,7 +506,7 @@ Library.ToggleKeybind = Options.MenuKeybind
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind', 'CacheInterval' })
 ThemeManager:SetFolder('AimAssistScript')
 SaveManager:SetFolder('AimAssistScript/game')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
