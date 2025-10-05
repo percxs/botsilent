@@ -32,11 +32,6 @@ local CoreGui = game:GetService('CoreGui')
 local AimAssistInstance = {}
 local AimAssistEnabled = false
 local fov = nil
-local cachedTargets = {}
-local lastCacheUpdate = 0
-local npcCache = {}
-local lastNPCScan = 0
-local npcScanInterval = 5
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Aim Assist',
@@ -121,15 +116,6 @@ SmoothingGroupBox:AddSlider('YSmoothing', {
     Max = 10,
     Rounding = 1,
     Tooltip = 'Y-axis smoothing strength (for air targets)'
-})
-
-SmoothingGroupBox:AddSlider('CacheInterval', {
-    Text = 'Cache Update Rate',
-    Default = 0.5,
-    Min = 0.1,
-    Max = 2,
-    Rounding = 1,
-    Tooltip = 'How often to scan for new targets (lower = more responsive but heavier)'
 })
 
 -- removed ZSmoothing
@@ -254,81 +240,53 @@ end
 
 -- removed humanizer logic
 
-local function scanForNPCs()
-    npcCache = {}
-    local playerCharacters = {}
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            playerCharacters[player.Character] = true
-        end
-    end
-    
-    for _, inst in ipairs(workspace:GetDescendants()) do
-        if inst:IsA('Model') and not playerCharacters[inst] then
-            local humanoid = inst:FindFirstChildOfClass('Humanoid')
-            local rootPart = inst:FindFirstChild('HumanoidRootPart')
-            if humanoid and rootPart and inst ~= LocalPlayer.Character then
-                table.insert(npcCache, inst)
-            end
-        end
-    end
-    lastNPCScan = tick()
-end
-
-local function updateTargetCache()
-    cachedTargets = {}
+local function getValidPlayers()
+    local validPlayers = {}
+    local closestMode = Toggles.ClosestMode.Value
+    local hitPartValue = Options.HitPart.Value
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             local rootPart = character:FindFirstChild('HumanoidRootPart')
-            if humanoid and rootPart then
-                table.insert(cachedTargets, { player = player, character = character })
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local targetPart = nil
+                if closestMode then
+                    targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
+                else
+                    targetPart = character:FindFirstChild(hitPartValue) or (character:FindFirstChild('Head') or rootPart)
+                end
+                if targetPart then
+                    table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
+                end
             end
         end
     end
     
     if Toggles.IncludeNPCs.Value then
-        if tick() - lastNPCScan > npcScanInterval then
-            scanForNPCs()
-        end
-        
-        for _, npc in ipairs(npcCache) do
-            if npc and npc.Parent then
-                local humanoid = npc:FindFirstChildOfClass('Humanoid')
-                if humanoid and humanoid.Health > 0 then
-                    table.insert(cachedTargets, { player = nil, character = npc })
-                end
-            end
-        end
-    end
-end
-
-local function getValidPlayers()
-    local validPlayers = {}
-    local closestMode = Toggles.ClosestMode.Value
-    local hitPartValue = Options.HitPart.Value
-    local camPos = Camera.CFrame.Position
-    local maxDist = Options.FOV.Value * 10
-    
-    for _, targetData in pairs(cachedTargets) do
-        local character = targetData.character
-        if character and character.Parent then
-            local humanoid = character:FindFirstChild('Humanoid')
-            local rootPart = character:FindFirstChild('HumanoidRootPart')
-            if humanoid and rootPart and humanoid.Health > 0 then
-                local distance = (camPos - rootPart.Position).Magnitude
-                if distance < maxDist then
-                    local targetPart = nil
-                    if closestMode then
-                        targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
-                    else
-                        targetPart = character:FindFirstChild(hitPartValue) or (character:FindFirstChild('Head') or rootPart)
+        for _, inst in ipairs(workspace:GetChildren()) do
+            if inst:IsA('Model') and inst ~= LocalPlayer.Character then
+                local humanoid = inst:FindFirstChildOfClass('Humanoid')
+                local rootPart = inst:FindFirstChild('HumanoidRootPart')
+                if humanoid and rootPart and humanoid.Health > 0 then
+                    local isPlayer = false
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player.Character == inst then
+                            isPlayer = true
+                            break
+                        end
                     end
-                    if targetPart then
-                        table.insert(validPlayers, { player = targetData.player, character = character, targetPart = targetPart })
+                    if not isPlayer then
+                        local targetPart = nil
+                        if closestMode then
+                            targetPart = getClosestPart(inst) or (inst:FindFirstChild('Head') or rootPart)
+                        else
+                            targetPart = inst:FindFirstChild(hitPartValue) or (inst:FindFirstChild('Head') or rootPart)
+                        end
+                        if targetPart then
+                            table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
+                        end
                     end
                 end
             end
@@ -411,45 +369,12 @@ local function initializeAimAssist()
     
     table.insert(AimAssistInstance.connections, inputBeganConnection)
     table.insert(AimAssistInstance.connections, inputEndedConnection)
-
-    updateTargetCache()
     
-    local playerAddedConnection = Players.PlayerAdded:Connect(function()
-        task.wait(1)
-        updateTargetCache()
-    end)
-    
-    local playerRemovingConnection = Players.PlayerRemoving:Connect(function()
-        updateTargetCache()
-    end)
-    
-    table.insert(AimAssistInstance.connections, playerAddedConnection)
-    table.insert(AimAssistInstance.connections, playerRemovingConnection)
-    
-    local lastAirCheck = {}
-    local airCheckInterval = 0.5
-    
-    local aimConnection = RunService.Heartbeat:Connect(function(dt)
-        if not (AimAssistEnabled or AimHold) then 
-            if Camera.CameraType ~= Enum.CameraType.Custom then
-                Camera.CameraType = Enum.CameraType.Custom
-            end
-            return 
-        end
-        
-        local currentTime = tick()
-        if currentTime - lastCacheUpdate > Options.CacheInterval.Value then
-            updateTargetCache()
-            lastCacheUpdate = currentTime
-        end
+    local aimConnection = RunService.RenderStepped:Connect(function()
+        if not (AimAssistEnabled or AimHold) then return end
         
         local validPlayers = getValidPlayers()
-        if #validPlayers == 0 then 
-            if Camera.CameraType ~= Enum.CameraType.Custom then
-                Camera.CameraType = Enum.CameraType.Custom
-            end
-            return 
-        end
+        if #validPlayers == 0 then return end
         
         local closestDist = math.huge
         local bestPart = nil
@@ -471,33 +396,19 @@ local function initializeAimAssist()
         end
         
         if bestPart then
-            if Camera.CameraType ~= Enum.CameraType.Scriptable then
-                Camera.CameraType = Enum.CameraType.Scriptable
-            end
-            
-            local inAir = false
-            if not lastAirCheck[bestCharacter] or currentTime - lastAirCheck[bestCharacter].time > airCheckInterval then
-                inAir = isInAir(bestCharacter)
-                lastAirCheck[bestCharacter] = { air = inAir, time = currentTime }
-            else
-                inAir = lastAirCheck[bestCharacter].air
-            end
-            
+            local inAir = isInAir(bestCharacter)
             local xPred = Options.XPrediction.Value
             local yPred = inAir and Options.YPrediction.Value or 0
             
             local velocity = bestPart.AssemblyLinearVelocity
             local predictedPos = bestPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
             
-            local desired = CFrame.new(Camera.CFrame.Position, predictedPos)
+            local currentCam = Camera.CFrame
+            local desired = CFrame.new(currentCam.Position, predictedPos)
             local avgSmooth = (Options.XSmoothing.Value + Options.YSmoothing.Value) * 0.5
-            local alpha = math.clamp(dt * (10 / math.max(0.001, avgSmooth)), 0, 1)
+            local smoothFactor = 1 / math.max(0.1, avgSmooth)
             
-            Camera.CFrame = Camera.CFrame:Lerp(desired, alpha)
-        else
-            if Camera.CameraType ~= Enum.CameraType.Custom then
-                Camera.CameraType = Enum.CameraType.Custom
-            end
+            Camera.CFrame = currentCam:Lerp(desired, smoothFactor)
         end
     end)
     
@@ -507,14 +418,8 @@ end
 
 Toggles.AimAssistEnabled:OnChanged(function()
     if Toggles.AimAssistEnabled.Value then
-        cachedTargets = {}
-        npcCache = {}
-        lastCacheUpdate = 0
-        lastNPCScan = 0
         initializeAimAssist()
     else
-        cachedTargets = {}
-        npcCache = {}
         if AimAssistInstance.fov then
             AimAssistInstance.fov:Remove()
         end
@@ -527,9 +432,6 @@ Toggles.AimAssistEnabled:OnChanged(function()
         end
         if AimAssistInstance.hook then
             restoremetamethod(game, '__index', AimAssistInstance.hook)
-        end
-        if Camera.CameraType ~= Enum.CameraType.Custom then
-            Camera.CameraType = Enum.CameraType.Custom
         end
     end
 end)
@@ -545,8 +447,6 @@ Library:SetWatermarkVisibility(true)
 Library:SetWatermark('Aim Assist | LinoriaLib')
 
 Library:OnUnload(function()
-    cachedTargets = {}
-    npcCache = {}
     if AimAssistInstance and AimAssistInstance.fov then
         AimAssistInstance.fov:Remove()
     end
@@ -559,9 +459,6 @@ Library:OnUnload(function()
     end
     if AimAssistInstance and AimAssistInstance.hook then
         restoremetamethod(game, '__index', AimAssistInstance.hook)
-    end
-    if Camera.CameraType ~= Enum.CameraType.Custom then
-        Camera.CameraType = Enum.CameraType.Custom
     end
     Library.Unloaded = true
 end)
