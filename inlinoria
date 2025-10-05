@@ -5,7 +5,7 @@ local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))
 local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 
 local Window = Library:CreateWindow({
-    Title = 'Silent Aim',
+    Title = 'Aim Assist',
     Center = true,
     AutoShow = true,
     TabPadding = 8,
@@ -13,12 +13,15 @@ local Window = Library:CreateWindow({
 })
 
 local Tabs = {
-    Main = Window:AddTab('Silent Aim'),
+    Main = Window:AddTab('Aim Assist'),
     ['UI Settings'] = Window:AddTab('UI Settings'),
 }
 
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
-local AntiCurveGroupBox = Tabs.Main:AddLeftGroupbox('Anti Curve')
+local RightGroupBox = Tabs.Main:AddRightGroupbox('Prediction')
+local SmoothingGroupBox = Tabs.Main:AddLeftGroupbox('Smoothing')
+local LegitGroupBox = Tabs.Main:AddRightGroupbox('Legit')
+local HumanizerGroupBox = Tabs.Main:AddLeftGroupbox('Humanizer')
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
@@ -26,15 +29,14 @@ local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService('RunService')
 
-local SilentAimInstance = {}
-local SilentAimEnabled = false
+local AimAssistInstance = {}
+local AimAssistEnabled = false
 local fov = nil
-local angleData = {angle = 0, distance = 0}
 
-LeftGroupBox:AddToggle('SilentAimEnabled', {
-    Text = 'Silent Aim',
+LeftGroupBox:AddToggle('AimAssistEnabled', {
+    Text = 'Aim Assist',
     Default = false,
-    Tooltip = 'Enable/disable silent aim functionality'
+    Tooltip = 'Enable/disable aim assist functionality'
 })
 
 LeftGroupBox:AddSlider('FOV', {
@@ -44,15 +46,6 @@ LeftGroupBox:AddSlider('FOV', {
     Max = 2000,
     Rounding = 0,
     Tooltip = 'Field of view for target detection'
-})
-
-LeftGroupBox:AddSlider('Prediction', {
-    Text = 'Prediction',
-    Default = 0.0223,
-    Min = 0,
-    Max = 0.1,
-    Rounding = 4,
-    Tooltip = 'Bullet prediction value'
 })
 
 LeftGroupBox:AddDropdown('HitPart', {
@@ -77,39 +70,160 @@ LeftGroupBox:AddToggle('FOVVisible', {
 LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
     Default = 'C',
     Mode = 'Toggle',
-    Text = 'Silent Aim Keybind',
+    Text = 'Aim Assist Keybind',
     NoUI = false,
 })
 
-AntiCurveGroupBox:AddToggle('AntiCurveEnabled', {
-    Text = 'Anti Curve',
-    Default = false,
-    Tooltip = 'Enable anti-curve to avoid detection'
+RightGroupBox:AddSlider('XPrediction', {
+    Text = 'X Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.1,
+    Rounding = 4,
+    Tooltip = 'X-axis bullet prediction value'
 })
 
-AntiCurveGroupBox:AddSlider('AntiCurveMaxAngle', {
-    Text = 'Max Angle',
-    Default = 7.67,
-    Min = 1,
-    Max = 20,
-    Rounding = 2,
-    Tooltip = 'Maximum angle for anti-curve'
+RightGroupBox:AddSlider('YPrediction', {
+    Text = 'Y Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.1,
+    Rounding = 4,
+    Tooltip = 'Y-axis bullet prediction value (for air targets)'
 })
 
-AntiCurveGroupBox:AddSlider('AntiCurveDistanceThreshold', {
-    Text = 'Distance Threshold',
-    Default = 50,
-    Min = 10,
-    Max = 200,
-    Rounding = 0,
-    Tooltip = 'Distance threshold for anti-curve'
+RightGroupBox:AddSlider('ZPrediction', {
+    Text = 'Z Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.1,
+    Rounding = 4,
+    Tooltip = 'Z-axis bullet prediction value'
 })
 
-AntiCurveGroupBox:AddToggle('AntiCurveVisualize', {
-    Text = 'Visualize',
-    Default = false,
-    Tooltip = 'Show anti-curve visualization'
+SmoothingGroupBox:AddSlider('XSmoothing', {
+    Text = 'X Smoothing',
+    Default = 1,
+    Min = 0.1,
+    Max = 10,
+    Rounding = 1,
+    Tooltip = 'X-axis smoothing strength'
 })
+
+SmoothingGroupBox:AddSlider('YSmoothing', {
+    Text = 'Y Smoothing',
+    Default = 1,
+    Min = 0.1,
+    Max = 10,
+    Rounding = 1,
+    Tooltip = 'Y-axis smoothing strength (for air targets)'
+})
+
+SmoothingGroupBox:AddSlider('ZSmoothing', {
+    Text = 'Z Smoothing',
+    Default = 1,
+    Min = 0.1,
+    Max = 10,
+    Rounding = 1,
+    Tooltip = 'Z-axis smoothing strength'
+})
+
+LegitGroupBox:AddDropdown('EasingStyle', {
+    Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
+    Default = 1,
+    Text = 'Easing Style',
+    Tooltip = 'Easing animation style'
+})
+
+LegitGroupBox:AddDropdown('EasingDirection', {
+    Values = {'In', 'Out', 'InOut'},
+    Default = 1,
+    Text = 'Easing Direction',
+    Tooltip = 'Easing direction'
+})
+
+LegitGroupBox:AddDropdown('FirstEasing', {
+    Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
+    Default = 1,
+    Text = 'First Easing',
+    Tooltip = 'How the aim assist starts'
+})
+
+LegitGroupBox:AddDropdown('SecondEasing', {
+    Values = {'Linear', 'Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Back', 'Elastic', 'Bounce'},
+    Default = 1,
+    Text = 'Second Easing',
+    Tooltip = 'How the aim assist ends'
+})
+
+LegitGroupBox:AddSlider('LegitSmoothing', {
+    Text = 'Legit Smoothing',
+    Default = 1,
+    Min = 0.1,
+    Max = 5,
+    Rounding = 1,
+    Tooltip = 'Smoothing for legit mode'
+})
+
+HumanizerGroupBox:AddSlider('Sample1', {
+    Text = 'Sample 1',
+    Default = 1.0,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 1'
+})
+
+HumanizerGroupBox:AddSlider('Sample2', {
+    Text = 'Sample 2',
+    Default = -0.7,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 2'
+})
+
+HumanizerGroupBox:AddSlider('Sample3', {
+    Text = 'Sample 3',
+    Default = -0.9,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 3'
+})
+
+HumanizerGroupBox:AddSlider('Sample4', {
+    Text = 'Sample 4',
+    Default = 1.2,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 4'
+})
+
+HumanizerGroupBox:AddSlider('Sample5', {
+    Text = 'Sample 5',
+    Default = 0.8,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 5'
+})
+
+HumanizerGroupBox:AddSlider('Sample6', {
+    Text = 'Sample 6',
+    Default = 0.5,
+    Min = -2,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'Humanizer sample 6'
+})
+
+local samples = {
+    {1.0, -0.7}, {-0.9, 1.2}, {0.8, 0.5}, {-1.0, -0.8},
+    {0.6, -1.2}, {-0.7, 1.0}, {0.9, 0.9}, {-1.1, 0.7},
+    {0.8, -1.0}, {-0.9, -0.9}, {1.2, 0.3}, {-0.3, 1.3}
+}
 
 local function getClosestPart(character)
     if not character then return nil end
@@ -147,45 +261,16 @@ local function getClosestPart(character)
     return closestPart
 end
 
-local function applyAntiCurve(targetPosition, cameraPosition)
-    if not Toggles.AntiCurveEnabled.Value then
-        angleData.angle = 0
-        angleData.distance = (targetPosition - cameraPosition).Magnitude
-        return targetPosition
-    end
-    
-    local maxAngle = math.rad(Options.AntiCurveMaxAngle.Value)
-    local distance = (targetPosition - cameraPosition).Magnitude
-    
-    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-    local targetDirection = (targetPosition - cameraPosition).Unit
-    local crosshairDirection = crosshairRay.Direction
-    
-    local dotProduct = crosshairDirection:Dot(targetDirection)
-    local actualAngle = math.acos(math.clamp(dotProduct, -1, 1))
-    local actualAngleDegrees = math.deg(actualAngle)
-    
-    if math.random() < 0.3 then
-        local randomAngleX = (math.random() - 0.5) * maxAngle
-        local randomAngleY = (math.random() - 0.5) * maxAngle
-        
-        local rightVector = Camera.CFrame.RightVector
-        local upVector = Camera.CFrame.UpVector
-        
-        local offsetX = rightVector * math.sin(randomAngleX) * distance * 0.1
-        local offsetY = upVector * math.sin(randomAngleY) * distance * 0.1
-        
-        local curvedPosition = targetPosition + offsetX + offsetY
-        
-        angleData.angle = actualAngleDegrees
-        angleData.distance = distance
-        
-        return curvedPosition
-    else
-        angleData.angle = actualAngleDegrees
-        angleData.distance = distance
-        return targetPosition
-    end
+local function isInAir(character)
+    if not character or not character:FindFirstChild('HumanoidRootPart') then return false end
+    local rootPart = character.HumanoidRootPart
+    local raycast = workspace:Raycast(rootPart.Position, Vector3.new(0, -10, 0))
+    return raycast == nil
+end
+
+local function applyHumanizer(input)
+    local sample = samples[math.random(1, #samples)]
+    return input + (sample[1] * 0.01) + (sample[2] * 0.01)
 end
 
 local function getValidPlayers()
@@ -214,22 +299,41 @@ local function getValidPlayers()
             end
         end
     end
+    
+    local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+    if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+        local targetPart = nil
+        if Toggles.ClosestMode.Value then
+            targetPart = getClosestPart(dummy) or (dummy.Head or dummy.HumanoidRootPart)
+        else
+            targetPart = dummy:FindFirstChild(Options.HitPart.Value) or (dummy.Head or dummy.HumanoidRootPart)
+        end
+        
+        if targetPart then
+            table.insert(validPlayers, {
+                player = nil,
+                character = dummy,
+                targetPart = targetPart
+            })
+        end
+    end
+    
     return validPlayers
 end
 
-local function initializeSilentAim()
-    if SilentAimInstance.fov then
-        SilentAimInstance.fov:Remove()
+local function initializeAimAssist()
+    if AimAssistInstance.fov then
+        AimAssistInstance.fov:Remove()
     end
-    if SilentAimInstance.connections then
-        for _, connection in pairs(SilentAimInstance.connections) do
+    if AimAssistInstance.connections then
+        for _, connection in pairs(AimAssistInstance.connections) do
             if connection and connection.Disconnect then
                 connection:Disconnect()
             end
         end
     end
     
-    SilentAimInstance = {}
+    AimAssistInstance = {}
     
     if Drawing then
         fov = Drawing.new('Circle')
@@ -240,13 +344,13 @@ local function initializeSilentAim()
         fov.Transparency = 1
         fov.Visible = Toggles.FOVVisible.Value
         fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
-        SilentAimInstance.fov = fov
+        AimAssistInstance.fov = fov
     else
         fov = nil
-        SilentAimInstance.fov = nil
+        AimAssistInstance.fov = nil
     end
     
-    SilentAimInstance.connections = {}
+    AimAssistInstance.connections = {}
     
     local renderConnection = RunService.RenderStepped:Connect(function()
         if fov then
@@ -254,102 +358,38 @@ local function initializeSilentAim()
             fov.Visible = Toggles.FOVVisible.Value
             fov.Radius = Options.FOV.Value
         end
-        
-        if Toggles.AntiCurveVisualize.Value and SilentAimEnabled then
-            local currentTime = tick()
-            if currentTime - (angleData.lastPrintTime or 0) > 0.1 then
-                local maxAngle = Options.AntiCurveMaxAngle.Value
-                local currentAngle = angleData.angle
-                local distance = angleData.distance
-                local target = nil
-                local targetPart = nil
-                
-                local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
-                if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-                    target = dummy
-                    targetPart = dummy.Head or dummy.HumanoidRootPart
-                else
-                    local validPlayers = getValidPlayers()
-                    local closestDist = math.huge
-                    
-                    for _, playerData in pairs(validPlayers) do
-                        local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
-                        
-                        if onScreen then
-                            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                            if dist < closestDist then
-                                closestDist = dist
-                                target = playerData.character
-                                targetPart = playerData.targetPart
-                            end
-                        end
-                    end
-                end
-                
-                if target and targetPart then
-                    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-                    local screenDist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                    
-                    if onScreen and screenDist <= Options.FOV.Value then
-                        local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-                        local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
-                        local crosshairDir = crosshairRay.Direction
-                        
-                        local dot = crosshairDir:Dot(targetDir)
-                        local angle = math.acos(math.clamp(dot, -1, 1))
-                        local angleDeg = math.deg(angle)
-                        
-                        local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
-                        local realDist = (targetPart.Position - charPos).Magnitude
-                    end
-                end
-                
-                angleData.lastPrintTime = currentTime
-            end
-        end
     end)
     
-    table.insert(SilentAimInstance.connections, renderConnection)
+    table.insert(AimAssistInstance.connections, renderConnection)
     
     local keyConnection = Mouse.KeyDown:Connect(function(key)
         if key:lower() == Options.AimKey.Value:lower() then
-            SilentAimEnabled = not SilentAimEnabled
+            AimAssistEnabled = not AimAssistEnabled
             if fov then
-                fov.Color = SilentAimEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                fov.Color = AimAssistEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
             end
         end
     end)
     
-    table.insert(SilentAimInstance.connections, keyConnection)
+    table.insert(AimAssistInstance.connections, keyConnection)
     
     local oldIndex
     oldIndex = hookmetamethod(game, '__index', function(self, key)
-        if self == Mouse and key:lower() == 'hit' and SilentAimEnabled then
+        if self == Mouse and key:lower() == 'hit' and AimAssistEnabled then
+            local validPlayers = getValidPlayers()
+            local closestDist = math.huge
             local target = nil
             local targetPart = nil
             
-            local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
-            if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-                target = dummy
-                if Toggles.ClosestMode.Value then
-                    targetPart = getClosestPart(dummy) or (dummy.Head or dummy.HumanoidRootPart)
-                else
-                    targetPart = dummy:FindFirstChild(Options.HitPart.Value) or (dummy.Head or dummy.HumanoidRootPart)
-                end
-            else
-                local validPlayers = getValidPlayers()
-                local closestDist = math.huge
+            for _, playerData in pairs(validPlayers) do
+                local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
                 
-                for _, playerData in pairs(validPlayers) do
-                    local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
-                    
-                    if onScreen then
-                        local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                        if dist < closestDist then
-                            closestDist = dist
-                            target = playerData.character
-                            targetPart = playerData.targetPart
-                        end
+                if onScreen then
+                    local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        target = playerData.character
+                        targetPart = playerData.targetPart
                     end
                 end
             end
@@ -359,87 +399,77 @@ local function initializeSilentAim()
                 local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
 
                 if onScreen and dist <= Options.FOV.Value then
-                    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-                    local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
-                    local crosshairDir = crosshairRay.Direction
+                    local inAir = isInAir(target)
                     
-                    local dot = crosshairDir:Dot(targetDir)
-                    local angle = math.acos(math.clamp(dot, -1, 1))
-                    local angleDeg = math.deg(angle)
+                    local xPred = Options.XPrediction.Value
+                    local yPred = inAir and Options.YPrediction.Value or Options.XPrediction.Value
+                    local zPred = Options.ZPrediction.Value
                     
-                    local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
-                    local dist = (targetPart.Position - charPos).Magnitude
+                    local xSmooth = Options.XSmoothing.Value
+                    local ySmooth = inAir and Options.YSmoothing.Value or Options.XSmoothing.Value
+                    local zSmooth = Options.ZSmoothing.Value
                     
-                    if Toggles.AntiCurveEnabled.Value then
-                        if Toggles.AntiCurveVisualize.Value then
-                            print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, Options.AntiCurveMaxAngle.Value, tostring(angleDeg <= Options.AntiCurveMaxAngle.Value)))
-                        end
-                        if angleDeg <= Options.AntiCurveMaxAngle.Value then
-                            if dist <= Options.AntiCurveDistanceThreshold.Value then
-                                local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
-                                local curvedPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
-                                return CFrame.new(curvedPos)
-                            else
-                                local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
-                                return CFrame.new(predicted.Position)
-                            end
-                        end
-                    else
-                        local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
-                        return CFrame.new(predicted.Position)
-                    end
+                    local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
+                    
+                    local smoothedPos = Vector3.new(
+                        applyHumanizer(predicted.Position.X) / xSmooth,
+                        applyHumanizer(predicted.Position.Y) / ySmooth,
+                        applyHumanizer(predicted.Position.Z) / zSmooth
+                    )
+                    
+                    return CFrame.new(smoothedPos)
                 end
             end
         end
         return oldIndex(self, key)
     end)
     
-    SilentAimInstance.hook = oldIndex
+    AimAssistInstance.hook = oldIndex
 end
 
-Toggles.SilentAimEnabled:OnChanged(function()
-    if Toggles.SilentAimEnabled.Value then
-        initializeSilentAim()
+Toggles.AimAssistEnabled:OnChanged(function()
+    if Toggles.AimAssistEnabled.Value then
+        initializeAimAssist()
     else
-        if SilentAimInstance.fov then
-            SilentAimInstance.fov:Remove()
+        if AimAssistInstance.fov then
+            AimAssistInstance.fov:Remove()
         end
-        if SilentAimInstance.connections then
-            for _, connection in pairs(SilentAimInstance.connections) do
+        if AimAssistInstance.connections then
+            for _, connection in pairs(AimAssistInstance.connections) do
                 if connection and connection.Disconnect then
                     connection:Disconnect()
                 end
             end
         end
-        if SilentAimInstance.hook then
-            restoremetamethod(game, '__index', SilentAimInstance.hook)
+        if AimAssistInstance.hook then
+            restoremetamethod(game, '__index', AimAssistInstance.hook)
         end
     end
 end)
 
 Options.AimKey:OnChanged(function()
-    SilentAimEnabled = false
+    AimAssistEnabled = false
     if fov then
         fov.Color = Color3.fromRGB(255, 0, 0)
     end
 end)
 
 Library:SetWatermarkVisibility(true)
-Library:SetWatermark('Silent Aim | LinoriaLib')
+Library:SetWatermark('Aim Assist | LinoriaLib')
 
 Library:OnUnload(function()
-    if SilentAimInstance and SilentAimInstance.fov then
-        SilentAimInstance.fov:Remove()
+    if AimAssistInstance and AimAssistInstance.fov then
+        AimAssistInstance.fov:Remove()
     end
-    if SilentAimInstance and SilentAimInstance.connections then
-        for _, connection in pairs(SilentAimInstance.connections) do
+    if AimAssistInstance and AimAssistInstance.connections then
+        for _, connection in pairs(AimAssistInstance.connections) do
             if connection and connection.Disconnect then
                 connection:Disconnect()
             end
         end
     end
-    if SilentAimInstance and SilentAimInstance.hook then
-        restoremetamethod(game, '__index', SilentAimInstance.hook)
+    if AimAssistInstance and AimAssistInstance.hook then
+        restoremetamethod(game, '__index', AimAssistInstance.hook)
     end
     Library.Unloaded = true
 end)
@@ -454,8 +484,8 @@ ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
-ThemeManager:SetFolder('SilentAimScript')
-SaveManager:SetFolder('SilentAimScript/game')
+ThemeManager:SetFolder('AimAssistScript')
+SaveManager:SetFolder('AimAssistScript/game')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
