@@ -328,7 +328,6 @@ end
 
 local function getValidPlayers()
     local validPlayers = {}
-    local closestMode = Toggles.ClosestMode.Value
     local hitPartValue = Options.HitPart.Value
     
     for _, player in pairs(Players:GetPlayers()) do
@@ -337,13 +336,8 @@ local function getValidPlayers()
             local humanoid = character:FindFirstChild('Humanoid')
             local rootPart = character:FindFirstChild('HumanoidRootPart')
             if humanoid and rootPart and humanoid.Health > 0 then
-                local targetPart = nil
-                if closestMode then
-                    targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
-                else
-                    targetPart = character:FindFirstChild(hitPartValue) or (character:FindFirstChild('Head') or rootPart)
-                end
-                if targetPart and isVisible(targetPart, character) then
+                local targetPart = character:FindFirstChild(hitPartValue) or character:FindFirstChild('Head') or rootPart
+                if targetPart then
                     table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
                 end
             end
@@ -353,16 +347,9 @@ local function getValidPlayers()
     if Toggles.IncludeNPCs.Value then
         local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
         if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
-            local targetPart = nil
-            if closestMode then
-                targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
-            else
-                targetPart = dummy:FindFirstChild(hitPartValue) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
-            end
+            local targetPart = dummy:FindFirstChild(hitPartValue) or dummy:FindFirstChild('Head') or dummy.HumanoidRootPart
             if targetPart then
-                if not Toggles.WallCheck.Value or isVisible(targetPart, dummy) then
-                    table.insert(validPlayers, { player = nil, character = dummy, targetPart = targetPart })
-                end
+                table.insert(validPlayers, { player = nil, character = dummy, targetPart = targetPart })
             end
         end
     end
