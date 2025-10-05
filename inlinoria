@@ -671,5 +671,8 @@ ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
 
 
+print("[DEBUG] RightGroupBox exists:", RightGroupBox ~= nil)
+print("[DEBUG] RightGroupBox type:", typeof(RightGroupBox))
+
 -- loadstring(game:HttpGet('https://raw.githubusercontent.com/percxs/botsilent/refs/heads/main/inlinoria'))()
     
