@@ -1,0 +1,461 @@
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+
+local Window = Library:CreateWindow({
+    Title = 'Silent Aim',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+
+local Tabs = {
+    Main = Window:AddTab('Silent Aim'),
+    ['UI Settings'] = Window:AddTab('UI Settings'),
+}
+
+local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
+local AntiCurveGroupBox = Tabs.Main:AddLeftGroupbox('Anti Curve')
+
+local Players = game:GetService('Players')
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService('RunService')
+
+local SilentAimInstance = {}
+local SilentAimEnabled = false
+local fov = nil
+local angleData = {angle = 0, distance = 0}
+
+LeftGroupBox:AddToggle('SilentAimEnabled', {
+    Text = 'Silent Aim',
+    Default = false,
+    Tooltip = 'Enable/disable silent aim functionality'
+})
+
+LeftGroupBox:AddSlider('FOV', {
+    Text = 'FOV',
+    Default = 1000,
+    Min = 100,
+    Max = 2000,
+    Rounding = 0,
+    Tooltip = 'Field of view for target detection'
+})
+
+LeftGroupBox:AddSlider('Prediction', {
+    Text = 'Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.1,
+    Rounding = 4,
+    Tooltip = 'Bullet prediction value'
+})
+
+LeftGroupBox:AddDropdown('HitPart', {
+    Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'},
+    Default = 1,
+    Text = 'Hit Part',
+    Tooltip = 'Target body part'
+})
+
+LeftGroupBox:AddToggle('ClosestMode', {
+    Text = 'Closest Mode',
+    Default = false,
+    Tooltip = 'Target closest body part instead of specific part'
+})
+
+LeftGroupBox:AddToggle('FOVVisible', {
+    Text = 'FOV Visible',
+    Default = false,
+    Tooltip = 'Show FOV circle'
+})
+
+LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
+    Default = 'C',
+    Mode = 'Toggle',
+    Text = 'Silent Aim Keybind',
+    NoUI = false,
+})
+
+AntiCurveGroupBox:AddToggle('AntiCurveEnabled', {
+    Text = 'Anti Curve',
+    Default = false,
+    Tooltip = 'Enable anti-curve to avoid detection'
+})
+
+AntiCurveGroupBox:AddSlider('AntiCurveMaxAngle', {
+    Text = 'Max Angle',
+    Default = 7.67,
+    Min = 1,
+    Max = 20,
+    Rounding = 2,
+    Tooltip = 'Maximum angle for anti-curve'
+})
+
+AntiCurveGroupBox:AddSlider('AntiCurveDistanceThreshold', {
+    Text = 'Distance Threshold',
+    Default = 50,
+    Min = 10,
+    Max = 200,
+    Rounding = 0,
+    Tooltip = 'Distance threshold for anti-curve'
+})
+
+AntiCurveGroupBox:AddToggle('AntiCurveVisualize', {
+    Text = 'Visualize',
+    Default = false,
+    Tooltip = 'Show anti-curve visualization'
+})
+
+local function getClosestPart(character)
+    if not character then return nil end
+    
+    local parts = {}
+    local bodyParts = {
+        'Head', 'HumanoidRootPart',
+        'UpperTorso', 'LowerTorso',
+        'LeftUpperArm', 'RightUpperArm', 'LeftLowerArm', 'RightLowerArm',
+        'LeftUpperLeg', 'RightUpperLeg', 'LeftLowerLeg', 'RightLowerLeg',
+        'LeftFoot', 'RightFoot', 'LeftHand', 'RightHand'
+    }
+    
+    for _, partName in pairs(bodyParts) do
+        local part = character:FindFirstChild(partName)
+        if part then
+            table.insert(parts, part)
+        end
+    end
+    
+    local closestPart = nil
+    local closestDist = math.huge
+    
+    for _, part in pairs(parts) do
+        local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+        if onScreen then
+            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestPart = part
+            end
+        end
+    end
+    
+    return closestPart
+end
+
+local function applyAntiCurve(targetPosition, cameraPosition)
+    if not Toggles.AntiCurveEnabled.Value then
+        angleData.angle = 0
+        angleData.distance = (targetPosition - cameraPosition).Magnitude
+        return targetPosition
+    end
+    
+    local maxAngle = math.rad(Options.AntiCurveMaxAngle.Value)
+    local distance = (targetPosition - cameraPosition).Magnitude
+    
+    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+    local targetDirection = (targetPosition - cameraPosition).Unit
+    local crosshairDirection = crosshairRay.Direction
+    
+    local dotProduct = crosshairDirection:Dot(targetDirection)
+    local actualAngle = math.acos(math.clamp(dotProduct, -1, 1))
+    local actualAngleDegrees = math.deg(actualAngle)
+    
+    if math.random() < 0.3 then
+        local randomAngleX = (math.random() - 0.5) * maxAngle
+        local randomAngleY = (math.random() - 0.5) * maxAngle
+        
+        local rightVector = Camera.CFrame.RightVector
+        local upVector = Camera.CFrame.UpVector
+        
+        local offsetX = rightVector * math.sin(randomAngleX) * distance * 0.1
+        local offsetY = upVector * math.sin(randomAngleY) * distance * 0.1
+        
+        local curvedPosition = targetPosition + offsetX + offsetY
+        
+        angleData.angle = actualAngleDegrees
+        angleData.distance = distance
+        
+        return curvedPosition
+    else
+        angleData.angle = actualAngleDegrees
+        angleData.distance = distance
+        return targetPosition
+    end
+end
+
+local function getValidPlayers()
+    local validPlayers = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local character = player.Character
+            local humanoid = character:FindFirstChild('Humanoid')
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local targetPart = nil
+                if Toggles.ClosestMode.Value then
+                    targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
+                else
+                    targetPart = character:FindFirstChild(Options.HitPart.Value) or (character:FindFirstChild('Head') or rootPart)
+                end
+                
+                if targetPart then
+                    table.insert(validPlayers, {
+                        player = player,
+                        character = character,
+                        targetPart = targetPart
+                    })
+                end
+            end
+        end
+    end
+    return validPlayers
+end
+
+local function initializeSilentAim()
+    if SilentAimInstance.fov then
+        SilentAimInstance.fov:Remove()
+    end
+    if SilentAimInstance.connections then
+        for _, connection in pairs(SilentAimInstance.connections) do
+            if connection and connection.Disconnect then
+                connection:Disconnect()
+            end
+        end
+    end
+    
+    SilentAimInstance = {}
+    
+    if Drawing then
+        fov = Drawing.new('Circle')
+        fov.Thickness = 1
+        fov.Radius = Options.FOV.Value
+        fov.Color = Color3.fromRGB(0, 255, 0)
+        fov.Filled = false
+        fov.Transparency = 1
+        fov.Visible = Toggles.FOVVisible.Value
+        fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+        SilentAimInstance.fov = fov
+    else
+        fov = nil
+        SilentAimInstance.fov = nil
+    end
+    
+    SilentAimInstance.connections = {}
+    
+    local renderConnection = RunService.RenderStepped:Connect(function()
+        if fov then
+            fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+            fov.Visible = Toggles.FOVVisible.Value
+            fov.Radius = Options.FOV.Value
+        end
+        
+        if Toggles.AntiCurveVisualize.Value and SilentAimEnabled then
+            local currentTime = tick()
+            if currentTime - (angleData.lastPrintTime or 0) > 0.1 then
+                local maxAngle = Options.AntiCurveMaxAngle.Value
+                local currentAngle = angleData.angle
+                local distance = angleData.distance
+                local target = nil
+                local targetPart = nil
+                
+                local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+                if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+                    target = dummy
+                    targetPart = dummy.Head or dummy.HumanoidRootPart
+                else
+                    local validPlayers = getValidPlayers()
+                    local closestDist = math.huge
+                    
+                    for _, playerData in pairs(validPlayers) do
+                        local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                        
+                        if onScreen then
+                            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                            if dist < closestDist then
+                                closestDist = dist
+                                target = playerData.character
+                                targetPart = playerData.targetPart
+                            end
+                        end
+                    end
+                end
+                
+                if target and targetPart then
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                    local screenDist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    
+                    if onScreen and screenDist <= Options.FOV.Value then
+                        local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                        local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
+                        local crosshairDir = crosshairRay.Direction
+                        
+                        local dot = crosshairDir:Dot(targetDir)
+                        local angle = math.acos(math.clamp(dot, -1, 1))
+                        local angleDeg = math.deg(angle)
+                        
+                        local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                        local realDist = (targetPart.Position - charPos).Magnitude
+                    end
+                end
+                
+                angleData.lastPrintTime = currentTime
+            end
+        end
+    end)
+    
+    table.insert(SilentAimInstance.connections, renderConnection)
+    
+    local keyConnection = Mouse.KeyDown:Connect(function(key)
+        if key:lower() == Options.AimKey.Value:lower() then
+            SilentAimEnabled = not SilentAimEnabled
+            if fov then
+                fov.Color = SilentAimEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            end
+        end
+    end)
+    
+    table.insert(SilentAimInstance.connections, keyConnection)
+    
+    local oldIndex
+    oldIndex = hookmetamethod(game, '__index', function(self, key)
+        if self == Mouse and key:lower() == 'hit' and SilentAimEnabled then
+            local target = nil
+            local targetPart = nil
+            
+            local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+            if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+                target = dummy
+                if Toggles.ClosestMode.Value then
+                    targetPart = getClosestPart(dummy) or (dummy.Head or dummy.HumanoidRootPart)
+                else
+                    targetPart = dummy:FindFirstChild(Options.HitPart.Value) or (dummy.Head or dummy.HumanoidRootPart)
+                end
+            else
+                local validPlayers = getValidPlayers()
+                local closestDist = math.huge
+                
+                for _, playerData in pairs(validPlayers) do
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                    
+                    if onScreen then
+                        local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                        if dist < closestDist then
+                            closestDist = dist
+                            target = playerData.character
+                            targetPart = playerData.targetPart
+                        end
+                    end
+                end
+            end
+            
+            if target and targetPart then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+
+                if onScreen and dist <= Options.FOV.Value then
+                    local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                    local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
+                    local crosshairDir = crosshairRay.Direction
+                    
+                    local dot = crosshairDir:Dot(targetDir)
+                    local angle = math.acos(math.clamp(dot, -1, 1))
+                    local angleDeg = math.deg(angle)
+                    
+                    local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                    local dist = (targetPart.Position - charPos).Magnitude
+                    
+                    if Toggles.AntiCurveEnabled.Value then
+                        if Toggles.AntiCurveVisualize.Value then
+                            print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, Options.AntiCurveMaxAngle.Value, tostring(angleDeg <= Options.AntiCurveMaxAngle.Value)))
+                        end
+                        if angleDeg <= Options.AntiCurveMaxAngle.Value then
+                            if dist <= Options.AntiCurveDistanceThreshold.Value then
+                                local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
+                                local curvedPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
+                                return CFrame.new(curvedPos)
+                            else
+                                local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
+                                return CFrame.new(predicted.Position)
+                            end
+                        end
+                    else
+                        local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Options.Prediction.Value)
+                        return CFrame.new(predicted.Position)
+                    end
+                end
+            end
+        end
+        return oldIndex(self, key)
+    end)
+    
+    SilentAimInstance.hook = oldIndex
+end
+
+Toggles.SilentAimEnabled:OnChanged(function()
+    if Toggles.SilentAimEnabled.Value then
+        initializeSilentAim()
+    else
+        if SilentAimInstance.fov then
+            SilentAimInstance.fov:Remove()
+        end
+        if SilentAimInstance.connections then
+            for _, connection in pairs(SilentAimInstance.connections) do
+                if connection and connection.Disconnect then
+                    connection:Disconnect()
+                end
+            end
+        end
+        if SilentAimInstance.hook then
+            restoremetamethod(game, '__index', SilentAimInstance.hook)
+        end
+    end
+end)
+
+Options.AimKey:OnChanged(function()
+    SilentAimEnabled = false
+    if fov then
+        fov.Color = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+Library:SetWatermarkVisibility(true)
+Library:SetWatermark('Silent Aim | LinoriaLib')
+
+Library:OnUnload(function()
+    if SilentAimInstance and SilentAimInstance.fov then
+        SilentAimInstance.fov:Remove()
+    end
+    if SilentAimInstance and SilentAimInstance.connections then
+        for _, connection in pairs(SilentAimInstance.connections) do
+            if connection and connection.Disconnect then
+                connection:Disconnect()
+            end
+        end
+    end
+    if SilentAimInstance and SilentAimInstance.hook then
+        restoremetamethod(game, '__index', SilentAimInstance.hook)
+    end
+    Library.Unloaded = true
+end)
+
+local MenuGroup = Tabs['UI Settings']:AddLeftGroupbox('Menu')
+MenuGroup:AddButton('Unload', function() Library:Unload() end)
+MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu keybind' })
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+ThemeManager:SetFolder('SilentAimScript')
+SaveManager:SetFolder('SilentAimScript/game')
+SaveManager:BuildConfigSection(Tabs['UI Settings'])
+ThemeManager:ApplyToTab(Tabs['UI Settings'])
+SaveManager:LoadAutoloadConfig()
