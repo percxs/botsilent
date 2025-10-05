@@ -351,41 +351,11 @@ local function getValidPlayers()
     end
     
     if Toggles.IncludeNPCs.Value then
-        local botNames = {'Dummy', 'NPC', 'Target'}
+        local botNames = {['Dummy'] = true, ['NPC'] = true, ['Target'] = true}
         
-        local botsFolder = workspace:FindFirstChild('Bots')
-        if botsFolder then
-            for _, botName in pairs(botNames) do
-                local bot = botsFolder:FindFirstChild(botName)
-                if bot and bot:IsA('Model') then
-                    local humanoid = bot:FindFirstChildOfClass('Humanoid')
-                    local rootPart = bot:FindFirstChild('HumanoidRootPart')
-                    if humanoid and rootPart and humanoid.Health > 0 then
-                        local targetPart = nil
-                        if closestMode then
-                            targetPart = getClosestPart(bot) or (bot:FindFirstChild('Head') or rootPart)
-                        else
-                            targetPart = bot:FindFirstChild(hitPartValue) or (bot:FindFirstChild('Head') or rootPart)
-                        end
-                        if targetPart and isVisible(targetPart, bot) then
-                            table.insert(validPlayers, { player = nil, character = bot, targetPart = targetPart })
-                        end
-                    end
-                end
-            end
-        end
-        
-        for _, inst in ipairs(workspace:GetChildren()) do
-            if inst:IsA('Model') and inst ~= LocalPlayer.Character then
-                local nameMatch = false
-                for _, botName in pairs(botNames) do
-                    if inst.Name == botName then
-                        nameMatch = true
-                        break
-                    end
-                end
-                
-                if nameMatch then
+        local function scanForBots(parent)
+            for _, inst in ipairs(parent:GetChildren()) do
+                if inst:IsA('Model') and inst ~= LocalPlayer.Character and botNames[inst.Name] then
                     local humanoid = inst:FindFirstChildOfClass('Humanoid')
                     local rootPart = inst:FindFirstChild('HumanoidRootPart')
                     if humanoid and rootPart and humanoid.Health > 0 then
@@ -402,6 +372,13 @@ local function getValidPlayers()
                 end
             end
         end
+        
+        local botsFolder = workspace:FindFirstChild('Bots')
+        if botsFolder then
+            scanForBots(botsFolder)
+        end
+        
+        scanForBots(workspace)
     end
     
     return validPlayers
