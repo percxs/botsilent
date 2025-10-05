@@ -461,12 +461,20 @@ local function initializeAimAssist()
             end
         end
         
-        local targetPart = LockedTarget.targetPart
         local targetChar = LockedTarget.character
+        if not targetChar then return end
         
-        if not targetPart or not targetChar then
-            return
+        local targetPart = LockedTarget.targetPart
+        
+        if Toggles.ClosestMode.Value then
+            targetPart = getClosestPart(targetChar)
+            if not targetPart then
+                local rootPart = targetChar:FindFirstChild('HumanoidRootPart')
+                targetPart = targetChar:FindFirstChild('Head') or rootPart
+            end
         end
+        
+        if not targetPart then return end
         
         local inAir = isInAir(targetChar)
         local xPred = Options.XPrediction.Value
