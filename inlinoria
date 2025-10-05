@@ -91,6 +91,18 @@ RightGroupBox:AddToggle('SilentAimEnabled', {
     Text = 'Enabled',
     Default = false,
     Tooltip = 'Enable/disable silent aim functionality'
+}):AddKeyPicker('SilentAimKey', {
+    Default = 'Q',
+    Mode = 'Toggle',
+    Text = 'Silent Aim',
+    NoUI = false,
+})
+
+RightGroupBox:AddDropdown('TargetMode', {
+    Values = {'Auto', 'Target'},
+    Default = 1,
+    Text = 'Target Mode',
+    Tooltip = 'Auto = targets based on mouse/FOV | Target = requires key press'
 })
 
 RightGroupBox:AddSlider('SilentFOV', {
@@ -108,13 +120,22 @@ RightGroupBox:AddToggle('SilentFOVVisible', {
     Tooltip = 'Show silent aim FOV circle'
 })
 
-RightGroupBox:AddSlider('SilentPrediction', {
-    Text = 'Prediction',
+RightGroupBox:AddSlider('SilentXPrediction', {
+    Text = 'X Prediction',
     Default = 0.0223,
     Min = 0,
     Max = 0.75,
     Rounding = 4,
-    Tooltip = 'Silent aim prediction value'
+    Tooltip = 'X-axis prediction value'
+})
+
+RightGroupBox:AddSlider('SilentYPrediction', {
+    Text = 'Y Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.75,
+    Rounding = 4,
+    Tooltip = 'Y-axis prediction value'
 })
 
 RightGroupBox:AddDropdown('SilentHitPart', {
