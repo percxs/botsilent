@@ -70,13 +70,13 @@ LeftGroupBox:AddToggle('FOVVisible', {
 
 LeftGroupBox:AddToggle('IncludeNPCs', {
     Text = 'Include NPCs',
-    Default = false,
+    Default = true,
     Tooltip = 'Target NPCs/bots (may reduce performance)'
 })
 
 LeftGroupBox:AddToggle('WallCheck', {
     Text = 'Wall Check',
-    Default = true,
+    Default = false,
     Tooltip = 'Only target visible players, stop aiming when target goes behind wall'
 })
 
@@ -420,23 +420,32 @@ local function initializeAimAssist()
         return true
     end
     
-    Options.AimKey:OnClick(function()
-        if not AimAssistActive then
-            LockedTarget = findClosestTarget()
-            if LockedTarget then
-                AimAssistActive = true
-                if fov then
-                    fov:SetColor(Color3.fromRGB(255, 0, 0))
+    local keyConnection = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        
+        local aimKeyValue = Options.AimKey.Value
+        if not aimKeyValue then return end
+        
+        if input.KeyCode.Name == aimKeyValue or input.KeyCode == Enum.KeyCode[aimKeyValue] then
+            if not AimAssistActive then
+                LockedTarget = findClosestTarget()
+                if LockedTarget then
+                    AimAssistActive = true
+                    if fov then
+                        fov:SetColor(Color3.fromRGB(255, 0, 0))
+                    end
                 end
-            end
-        else
-            AimAssistActive = false
-            LockedTarget = nil
-            if fov then
-                fov:SetColor(Color3.fromRGB(0, 255, 0))
+            else
+                AimAssistActive = false
+                LockedTarget = nil
+                if fov then
+                    fov:SetColor(Color3.fromRGB(0, 255, 0))
+                end
             end
         end
     end)
+    
+    table.insert(AimAssistInstance.connections, keyConnection)
     
     local aimConnection = RunService.RenderStepped:Connect(function(dt)
         if not AimAssistActive then return end
@@ -454,6 +463,10 @@ local function initializeAimAssist()
         
         local targetPart = LockedTarget.targetPart
         local targetChar = LockedTarget.character
+        
+        if not targetPart or not targetChar then
+            return
+        end
         
         local inAir = isInAir(targetChar)
         local xPred = Options.XPrediction.Value
