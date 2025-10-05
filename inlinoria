@@ -30,7 +30,6 @@ local UserInputService = game:GetService('UserInputService')
 local CoreGui = game:GetService('CoreGui')
 
 local AimAssistInstance = {}
-local AimAssistEnabled = false
 local fov = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
@@ -386,67 +385,50 @@ local function initializeAimAssist()
     local keyConnection = UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode[Options.AimKey.Value] then
-            AimAssistEnabled = not AimAssistEnabled
-            if fov then
-                fov:SetColor(AimAssistEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
+            local validPlayers = getValidPlayers()
+            if #validPlayers == 0 then return end
+            
+            local closestDist = math.huge
+            local bestPart = nil
+            local bestCharacter = nil
+            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+            local fovValue = Options.FOV.Value
+            
+            for _, playerData in pairs(validPlayers) do
+                local targetPart = playerData.targetPart
+                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                if onScreen then
+                    local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if dist < closestDist and dist <= fovValue then
+                        closestDist = dist
+                        bestPart = targetPart
+                        bestCharacter = playerData.character
+                    end
+                end
+            end
+            
+            if bestPart then
+                local inAir = isInAir(bestCharacter)
+                local xPred = Options.XPrediction.Value
+                local yPred = inAir and Options.YPrediction.Value or 0
+                
+                local velocity = bestPart.AssemblyLinearVelocity
+                local predictedPos = bestPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
+                
+                local screenPos = Camera:WorldToScreenPoint(predictedPos)
+                local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
+                
+                local deltaX = targetScreenPos.X - mousePos.X
+                local deltaY = targetScreenPos.Y - mousePos.Y
+                
+                if mousemoverel then
+                    mousemoverel(deltaX, deltaY)
+                end
             end
         end
     end)
     
     table.insert(AimAssistInstance.connections, keyConnection)
-    
-    local aimConnection = RunService.Heartbeat:Connect(function()
-        if not AimAssistEnabled then return end
-        
-        local validPlayers = getValidPlayers()
-        if #validPlayers == 0 then return end
-        
-        local closestDist = math.huge
-        local bestPart = nil
-        local bestCharacter = nil
-        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-        local fovValue = Options.FOV.Value
-        
-        for _, playerData in pairs(validPlayers) do
-            local targetPart = playerData.targetPart
-            local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-            if onScreen then
-                local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < closestDist and dist <= fovValue then
-                    closestDist = dist
-                    bestPart = targetPart
-                    bestCharacter = playerData.character
-                end
-            end
-        end
-        
-        if bestPart then
-            local inAir = isInAir(bestCharacter)
-            local xPred = Options.XPrediction.Value
-            local yPred = inAir and Options.YPrediction.Value or 0
-            
-            local velocity = bestPart.AssemblyLinearVelocity
-            local predictedPos = bestPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
-            
-            local screenPos = Camera:WorldToScreenPoint(predictedPos)
-            local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
-            
-            local deltaX = targetScreenPos.X - mousePos.X
-            local deltaY = targetScreenPos.Y - mousePos.Y
-            
-            local xSmooth = Options.XSmoothing.Value
-            local ySmooth = Options.YSmoothing.Value
-            
-            local moveX = deltaX / math.max(0.1, xSmooth)
-            local moveY = deltaY / math.max(0.1, ySmooth)
-            
-            if mousemoverel then
-                mousemoverel(moveX, moveY)
-            end
-        end
-    end)
-    
-    table.insert(AimAssistInstance.connections, aimConnection)
     
 end
 
@@ -467,13 +449,6 @@ Toggles.AimAssistEnabled:OnChanged(function()
         if AimAssistInstance.hook then
             restoremetamethod(game, '__index', AimAssistInstance.hook)
         end
-    end
-end)
-
-Options.AimKey:OnChanged(function()
-    AimAssistEnabled = false
-    if fov then
-        fov:SetColor(Color3.fromRGB(255, 0, 0))
     end
 end)
 
