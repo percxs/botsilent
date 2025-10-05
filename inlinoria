@@ -506,7 +506,7 @@ local function initializeAimAssist()
         local inAir = isInAir(targetChar)
         local xPred = Options.XPrediction.Value
         local yPred = inAir and Options.YPrediction.Value or 0
-        local zPred = (xPred + Options.YPrediction.Value) * 0.5
+        local zPred = xPred
         
         local velocity = targetPart.AssemblyLinearVelocity
         local predictedPos = targetPart.Position + (velocity * Vector3.new(xPred, yPred, zPred))
