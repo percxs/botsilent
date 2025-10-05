@@ -357,58 +357,6 @@ local function initializeAimAssist()
     
     table.insert(AimAssistInstance.connections, keyConnection)
     
-    local oldIndex
-    oldIndex = hookmetamethod(game, '__index', function(self, key)
-        if self == Mouse and key:lower() == 'hit' and AimAssistEnabled then
-            local validPlayers = getValidPlayers()
-            local closestDist = math.huge
-            local target = nil
-            local targetPart = nil
-            
-            for _, playerData in pairs(validPlayers) do
-                local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
-                
-                if onScreen then
-                    local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        target = playerData.character
-                        targetPart = playerData.targetPart
-                    end
-                end
-            end
-            
-            if target and targetPart then
-                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-
-                if onScreen and dist <= Options.FOV.Value then
-                    local inAir = isInAir(target)
-                    
-                    local xPred = Options.XPrediction.Value
-                    local yPred = inAir and Options.YPrediction.Value or Options.XPrediction.Value
-                    local zPred = Options.ZPrediction.Value
-                    
-                    local xSmooth = Options.XSmoothing.Value
-                    local ySmooth = inAir and Options.YSmoothing.Value or Options.XSmoothing.Value
-                    local zSmooth = Options.ZSmoothing.Value
-                    
-                    local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
-                    
-                    local smoothedPos = Vector3.new(
-                        applyHumanizer(predicted.Position.X) / xSmooth,
-                        applyHumanizer(predicted.Position.Y) / ySmooth,
-                        applyHumanizer(predicted.Position.Z) / zSmooth
-                    )
-                    
-                    return CFrame.new(smoothedPos)
-                end
-            end
-        end
-        return oldIndex(self, key)
-    end)
-    
-    AimAssistInstance.hook = oldIndex
 end
 
 Toggles.AimAssistEnabled:OnChanged(function()
@@ -473,3 +421,6 @@ SaveManager:SetFolder('AimAssistScript/game')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
+
+
+-- loadstring(game:HttpGet('https://raw.githubusercontent.com/percxs/botsilent/refs/heads/main/inlinoria'))()
