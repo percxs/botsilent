@@ -31,7 +31,6 @@ local CoreGui = game:GetService('CoreGui')
 
 local AimAssistInstance = {}
 local fov = nil
-local AimAssistActive = false
 local LockedTarget = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
@@ -437,74 +436,31 @@ local function initializeAimAssist()
         return true
     end
     
-    local keyBeganConnection = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        
-        local aimKeyValue = Options.AimKey.Value
-        if not aimKeyValue then return end
-        
-        local keyCode = Enum.KeyCode[aimKeyValue]
-        if input.KeyCode == keyCode then
-            local keyMode = Options.AimKey.Mode
-            
-            if keyMode == 'Toggle' then
-                if not AimAssistActive then
-                    LockedTarget = findClosestTarget()
-                    if LockedTarget then
-                        AimAssistActive = true
-                        if fov then
-                            fov:SetColor(Color3.fromRGB(255, 0, 0))
-                        end
-                    end
-                else
-                    AimAssistActive = false
-                    LockedTarget = nil
-                    if fov then
-                        fov:SetColor(Color3.fromRGB(0, 255, 0))
-                    end
-                end
-            elseif keyMode == 'Hold' or keyMode == 'Always' then
-                LockedTarget = findClosestTarget()
-                if LockedTarget then
-                    AimAssistActive = true
-                    if fov then
-                        fov:SetColor(Color3.fromRGB(255, 0, 0))
-                    end
-                end
-            end
-        end
-    end)
-    
-    local keyEndedConnection = UserInputService.InputEnded:Connect(function(input, gp)
-        if gp then return end
-        
-        local aimKeyValue = Options.AimKey.Value
-        if not aimKeyValue then return end
-        
-        local keyCode = Enum.KeyCode[aimKeyValue]
-        if input.KeyCode == keyCode then
-            local keyMode = Options.AimKey.Mode
-            
-            if keyMode == 'Hold' then
-                AimAssistActive = false
-                LockedTarget = nil
-                if fov then
-                    fov:SetColor(Color3.fromRGB(0, 255, 0))
-                end
-            end
-        end
-    end)
-    
-    table.insert(AimAssistInstance.connections, keyBeganConnection)
-    table.insert(AimAssistInstance.connections, keyEndedConnection)
+    local lastActiveState = false
     
     local aimConnection = RunService.RenderStepped:Connect(function(dt)
-        if not AimAssistActive then return end
+        local keyActive = Options.AimKey.Active
+        
+        if keyActive and not lastActiveState then
+            LockedTarget = findClosestTarget()
+            if fov then
+                fov:SetColor(Color3.fromRGB(255, 0, 0))
+            end
+        elseif not keyActive and lastActiveState then
+            LockedTarget = nil
+            if fov then
+                fov:SetColor(Color3.fromRGB(0, 255, 0))
+            end
+        end
+        
+        lastActiveState = keyActive
+        
+        if not keyActive then return end
+        if not LockedTarget then return end
         
         if not isTargetValid(LockedTarget) then
             LockedTarget = findClosestTarget()
             if not LockedTarget then
-                AimAssistActive = false
                 if fov then
                     fov:SetColor(Color3.fromRGB(0, 255, 0))
                 end
@@ -552,11 +508,9 @@ end
 
 Toggles.AimAssistEnabled:OnChanged(function()
     if Toggles.AimAssistEnabled.Value then
-        AimAssistActive = false
         LockedTarget = nil
         initializeAimAssist()
     else
-        AimAssistActive = false
         LockedTarget = nil
         if AimAssistInstance.fov then
             AimAssistInstance.fov:Remove()
@@ -578,7 +532,6 @@ Library:SetWatermarkVisibility(true)
 Library:SetWatermark('Aim Assist | LinoriaLib')
 
 Library:OnUnload(function()
-    AimAssistActive = false
     LockedTarget = nil
     if AimAssistInstance and AimAssistInstance.fov then
         AimAssistInstance.fov:Remove()
