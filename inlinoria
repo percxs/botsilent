@@ -121,7 +121,7 @@ SmoothingGroupBox:AddSlider('YSmoothing', {
     Min = 0.01,
     Max = 1,
     Rounding = 2,
-    Tooltip = '1.0 = sharpest, 0.01 = smoothest (for air targets)'
+    Tooltip = '1.0 = sharpest, 0.01 = smoothest'
 })
 
 -- removed ZSmoothing
@@ -274,16 +274,6 @@ local function getClosestPartToCrosshair(character)
     end
     
     return closestPart
-end
-
-local function isInAir(character)
-    if not character or not character:FindFirstChild('HumanoidRootPart') then return false end
-    local rootPart = character.HumanoidRootPart
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = {character, LocalPlayer.Character}
-    local raycast = workspace:Raycast(rootPart.Position, Vector3.new(0, -10, 0), rayParams)
-    return raycast == nil
 end
 
 local function isVisible(targetPart, targetCharacter)
@@ -503,9 +493,8 @@ local function initializeAimAssist()
         
         if not targetPart then return end
         
-        local inAir = isInAir(targetChar)
         local xPred = Options.XPrediction.Value
-        local yPred = inAir and Options.YPrediction.Value or 0
+        local yPred = Options.YPrediction.Value
         local zPred = xPred
         
         local velocity = targetPart.AssemblyLinearVelocity
