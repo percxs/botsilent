@@ -32,6 +32,7 @@ local CoreGui = game:GetService('CoreGui')
 local AimAssistInstance = {}
 local fov = nil
 local AimAssistActive = false
+local LockedTarget = nil
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Aim Assist',
@@ -383,27 +384,12 @@ local function initializeAimAssist()
     
     table.insert(AimAssistInstance.connections, renderConnection)
     
-    local keyConnection = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode[Options.AimKey.Value] then
-            AimAssistActive = not AimAssistActive
-            if fov then
-                fov:SetColor(AimAssistActive and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0))
-            end
-        end
-    end)
-    
-    table.insert(AimAssistInstance.connections, keyConnection)
-    
-    local aimConnection = RunService.Heartbeat:Connect(function()
-        if not AimAssistActive then return end
-        
+    local function findClosestTarget()
         local validPlayers = getValidPlayers()
-        if #validPlayers == 0 then return end
+        if #validPlayers == 0 then return nil end
         
         local closestDist = math.huge
-        local bestPart = nil
-        local bestCharacter = nil
+        local bestTarget = nil
         local mousePos = Vector2.new(Mouse.X, Mouse.Y)
         local fovValue = Options.FOV.Value
         
@@ -414,35 +400,91 @@ local function initializeAimAssist()
                 local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
                 if dist < closestDist and dist <= fovValue then
                     closestDist = dist
-                    bestPart = targetPart
-                    bestCharacter = playerData.character
+                    bestTarget = playerData
                 end
             end
         end
         
-        if bestPart then
-            local inAir = isInAir(bestCharacter)
-            local xPred = Options.XPrediction.Value
-            local yPred = inAir and Options.YPrediction.Value or 0
-            
-            local velocity = bestPart.AssemblyLinearVelocity
-            local predictedPos = bestPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
-            
-            local screenPos = Camera:WorldToScreenPoint(predictedPos)
-            local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
-            
-            local deltaX = targetScreenPos.X - mousePos.X
-            local deltaY = targetScreenPos.Y - mousePos.Y
-            
-            local xSmooth = Options.XSmoothing.Value
-            local ySmooth = Options.YSmoothing.Value
-            
-            local moveX = deltaX / math.max(0.1, xSmooth)
-            local moveY = deltaY / math.max(0.1, ySmooth)
-            
-            if mousemoverel then
-                mousemoverel(moveX, moveY)
+        return bestTarget
+    end
+    
+    local function isTargetValid(target)
+        if not target or not target.character or not target.targetPart then return false end
+        if not target.character.Parent then return false end
+        
+        local humanoid = target.character:FindFirstChild('Humanoid')
+        if not humanoid or humanoid.Health <= 0 then return false end
+        
+        if not isVisible(target.targetPart, target.character) then return false end
+        
+        return true
+    end
+    
+    local keyConnection = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode[Options.AimKey.Value] then
+            if not AimAssistActive then
+                LockedTarget = findClosestTarget()
+                if LockedTarget then
+                    AimAssistActive = true
+                    if fov then
+                        fov:SetColor(Color3.fromRGB(255, 0, 0))
+                    end
+                end
+            else
+                AimAssistActive = false
+                LockedTarget = nil
+                if fov then
+                    fov:SetColor(Color3.fromRGB(0, 255, 0))
+                end
             end
+        end
+    end)
+    
+    table.insert(AimAssistInstance.connections, keyConnection)
+    
+    local aimConnection = RunService.RenderStepped:Connect(function(dt)
+        if not AimAssistActive then return end
+        
+        if not isTargetValid(LockedTarget) then
+            LockedTarget = findClosestTarget()
+            if not LockedTarget then
+                AimAssistActive = false
+                if fov then
+                    fov:SetColor(Color3.fromRGB(0, 255, 0))
+                end
+                return
+            end
+        end
+        
+        local targetPart = LockedTarget.targetPart
+        local targetChar = LockedTarget.character
+        
+        local inAir = isInAir(targetChar)
+        local xPred = Options.XPrediction.Value
+        local yPred = inAir and Options.YPrediction.Value or 0
+        
+        local velocity = targetPart.AssemblyLinearVelocity
+        local predictedPos = targetPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
+        
+        local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
+        if not onScreen then return end
+        
+        local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
+        local currentMousePos = Vector2.new(Mouse.X, Mouse.Y)
+        
+        local deltaX = targetScreenPos.X - currentMousePos.X
+        local deltaY = targetScreenPos.Y - currentMousePos.Y
+        
+        local xSmooth = Options.XSmoothing.Value
+        local ySmooth = Options.YSmoothing.Value
+        
+        local moveX = deltaX / math.max(0.1, xSmooth)
+        local moveY = deltaY / math.max(0.1, ySmooth)
+        
+        mousemoverel = mousemoverel or (syn and syn.mouse_move) or nil
+        if mousemoverel then
+            mousemoverel(moveX, moveY)
         end
     end)
     
@@ -453,9 +495,11 @@ end
 Toggles.AimAssistEnabled:OnChanged(function()
     if Toggles.AimAssistEnabled.Value then
         AimAssistActive = false
+        LockedTarget = nil
         initializeAimAssist()
     else
         AimAssistActive = false
+        LockedTarget = nil
         if AimAssistInstance.fov then
             AimAssistInstance.fov:Remove()
         end
@@ -477,6 +521,7 @@ Library:SetWatermark('Aim Assist | LinoriaLib')
 
 Library:OnUnload(function()
     AimAssistActive = false
+    LockedTarget = nil
     if AimAssistInstance and AimAssistInstance.fov then
         AimAssistInstance.fov:Remove()
     end
