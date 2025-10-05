@@ -37,10 +37,12 @@ LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Enabled',
     Default = false,
     Tooltip = 'Enable/disable aim assist functionality'
-}):AddKeyPicker('AimKey', {
+})
+
+Toggles.AimAssistEnabled:AddKeyPicker('AimKey', {
     Default = 'C',
     Mode = 'Toggle',
-    Text = 'Aim Assist Keybind',
+    Text = 'Aim Assist',
     NoUI = false,
 })
 
