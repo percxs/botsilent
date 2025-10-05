@@ -231,22 +231,29 @@ local function initializeSilentAim()
     
     SilentAimInstance = {}
     
-    fov = Drawing.new('Circle')
-    fov.Thickness = 1
-    fov.Radius = Options.FOV.Value
-    fov.Color = Color3.fromRGB(0, 255, 0)
-    fov.Filled = false
-    fov.Transparency = 1
-    fov.Visible = Toggles.FOVVisible.Value
-    fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+    if Drawing then
+        fov = Drawing.new('Circle')
+        fov.Thickness = 1
+        fov.Radius = Options.FOV.Value
+        fov.Color = Color3.fromRGB(0, 255, 0)
+        fov.Filled = false
+        fov.Transparency = 1
+        fov.Visible = Toggles.FOVVisible.Value
+        fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+        SilentAimInstance.fov = fov
+    else
+        fov = nil
+        SilentAimInstance.fov = nil
+    end
     
-    SilentAimInstance.fov = fov
     SilentAimInstance.connections = {}
     
     local renderConnection = RunService.RenderStepped:Connect(function()
-        fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
-        fov.Visible = Toggles.FOVVisible.Value
-        fov.Radius = Options.FOV.Value
+        if fov then
+            fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+            fov.Visible = Toggles.FOVVisible.Value
+            fov.Radius = Options.FOV.Value
+        end
         
         if Toggles.AntiCurveVisualize.Value and SilentAimEnabled then
             local currentTime = tick()
@@ -307,7 +314,9 @@ local function initializeSilentAim()
     local keyConnection = Mouse.KeyDown:Connect(function(key)
         if key:lower() == Options.AimKey.Value:lower() then
             SilentAimEnabled = not SilentAimEnabled
-            fov.Color = SilentAimEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            if fov then
+                fov.Color = SilentAimEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            end
         end
     end)
     
@@ -419,17 +428,17 @@ Library:SetWatermarkVisibility(true)
 Library:SetWatermark('Silent Aim | LinoriaLib')
 
 Library:OnUnload(function()
-    if SilentAimInstance.fov then
+    if SilentAimInstance and SilentAimInstance.fov then
         SilentAimInstance.fov:Remove()
     end
-    if SilentAimInstance.connections then
+    if SilentAimInstance and SilentAimInstance.connections then
         for _, connection in pairs(SilentAimInstance.connections) do
             if connection and connection.Disconnect then
                 connection:Disconnect()
             end
         end
     end
-    if SilentAimInstance.hook then
+    if SilentAimInstance and SilentAimInstance.hook then
         restoremetamethod(game, '__index', SilentAimInstance.hook)
     end
     Library.Unloaded = true
