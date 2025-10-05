@@ -28,6 +28,7 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService('RunService')
+local UserInputService = game:GetService('UserInputService')
 
 local AimAssistInstance = {}
 local AimAssistEnabled = false
@@ -41,9 +42,9 @@ LeftGroupBox:AddToggle('AimAssistEnabled', {
 
 LeftGroupBox:AddSlider('FOV', {
     Text = 'FOV',
-    Default = 1000,
+    Default = 500,
     Min = 100,
-    Max = 2000,
+    Max = 1000,
     Rounding = 0,
     Tooltip = 'Field of view for target detection'
 })
@@ -327,7 +328,7 @@ local function initializeAimAssist()
         fov.Filled = false
         fov.Transparency = 1
         fov.Visible = Toggles.FOVVisible.Value
-        fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+        fov.Position = Vector2.new(Mouse.X, Mouse.Y)
         AimAssistInstance.fov = fov
     else
         fov = nil
@@ -338,7 +339,7 @@ local function initializeAimAssist()
     
     local renderConnection = RunService.RenderStepped:Connect(function()
         if fov then
-            fov.Position = Vector2.new(Mouse.X, Mouse.Y + 55)
+            fov.Position = Vector2.new(Mouse.X, Mouse.Y)
             fov.Visible = Toggles.FOVVisible.Value
             fov.Radius = Options.FOV.Value
         end
@@ -356,6 +357,68 @@ local function initializeAimAssist()
     end)
     
     table.insert(AimAssistInstance.connections, keyConnection)
+    
+    local AimHold = false
+    local inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+            AimHold = true
+        end
+    end)
+    
+    local inputEndedConnection = UserInputService.InputEnded:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+            AimHold = false
+        end
+    end)
+    
+    table.insert(AimAssistInstance.connections, inputBeganConnection)
+    table.insert(AimAssistInstance.connections, inputEndedConnection)
+
+    local aimConnection = RunService.Heartbeat:Connect(function(dt)
+        if not (Toggles.AimAssistEnabled.Value and (AimAssistEnabled or AimHold)) then return end
+        
+        local validPlayers = getValidPlayers()
+        local closestDist = math.huge
+        local bestPart = nil
+        local bestCharacter = nil
+        
+        for _, playerData in pairs(validPlayers) do
+            local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+            if onScreen then
+                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                if dist < closestDist and dist <= Options.FOV.Value then
+                    closestDist = dist
+                    bestPart = playerData.targetPart
+                    bestCharacter = playerData.character
+                end
+            end
+        end
+        
+        if bestPart then
+            local inAir = isInAir(bestCharacter)
+            local xPred = Options.XPrediction.Value
+            local yPred = inAir and Options.YPrediction.Value or Options.XPrediction.Value
+            local zPred = Options.ZPrediction.Value
+            
+            local predictedPos = bestPart.Position + (bestPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
+            
+            local humanizedPos = Vector3.new(
+                applyHumanizer(predictedPos.X),
+                applyHumanizer(predictedPos.Y),
+                applyHumanizer(predictedPos.Z)
+            )
+            
+            local desired = CFrame.new(Camera.CFrame.Position, humanizedPos)
+            local avgSmooth = (Options.XSmoothing.Value + Options.YSmoothing.Value + Options.ZSmoothing.Value) / 3
+            local alpha = math.clamp(dt * (10 / math.max(0.001, avgSmooth)), 0, 1)
+            
+            Camera.CFrame = Camera.CFrame:Lerp(desired, alpha)
+        end
+    end)
+    
+    table.insert(AimAssistInstance.connections, aimConnection)
     
 end
 
