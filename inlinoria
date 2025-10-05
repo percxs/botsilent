@@ -436,10 +436,30 @@ local function initializeAimAssist()
         return true
     end
     
+    local function getKeyState()
+        local mode = Options.AimKey.Mode
+        local key = Options.AimKey.Value
+        
+        if mode == 'Always' then
+            return true
+        elseif mode == 'Hold' then
+            if key == 'None' then return false end
+            
+            if key == 'MB1' or key == 'MB2' then
+                return key == 'MB1' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+                    or key == 'MB2' and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+            else
+                return UserInputService:IsKeyDown(Enum.KeyCode[key])
+            end
+        else
+            return Options.AimKey.Toggled or false
+        end
+    end
+    
     local lastActiveState = false
     
     local aimConnection = RunService.RenderStepped:Connect(function(dt)
-        local keyActive = Options.AimKey.Active
+        local keyActive = getKeyState()
         
         if keyActive and not lastActiveState then
             LockedTarget = findClosestTarget()
