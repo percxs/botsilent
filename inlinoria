@@ -40,6 +40,7 @@ local SilentAimInstance = {}
 local silentFov = nil
 local silentTracer = nil
 local SilentLockedTarget = nil
+local angleData = {angle = 0, distance = 0}
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Enabled',
@@ -445,7 +446,7 @@ local function getValidPlayers()
         local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
         if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
             local targetPart = dummy:FindFirstChild(hitPartValue) or dummy:FindFirstChild('Head') or dummy.HumanoidRootPart
-            if targetPart then
+                    if targetPart then
                 table.insert(validPlayers, { player = nil, character = dummy, targetPart = targetPart })
             end
         end
@@ -648,6 +649,8 @@ end)
 
 local function applyAntiCurve(targetPosition, cameraPosition)
     if not Toggles.AntiCurveEnabled.Value then
+        angleData.angle = 0
+        angleData.distance = (targetPosition - cameraPosition).Magnitude
         return targetPosition
     end
     
@@ -662,24 +665,27 @@ local function applyAntiCurve(targetPosition, cameraPosition)
     local actualAngle = math.acos(math.clamp(dotProduct, -1, 1))
     local actualAngleDegrees = math.deg(actualAngle)
     
-    if actualAngleDegrees <= Options.MaxAngle.Value then
-        if distance <= Options.DistanceThreshold.Value then
-            if math.random() < 0.3 then
-                local randomAngleX = (math.random() - 0.5) * maxAngle
-                local randomAngleY = (math.random() - 0.5) * maxAngle
-                
-                local rightVector = Camera.CFrame.RightVector
-                local upVector = Camera.CFrame.UpVector
-                
-                local offsetX = rightVector * math.sin(randomAngleX) * distance * 0.1
-                local offsetY = upVector * math.sin(randomAngleY) * distance * 0.1
-                
-                return targetPosition + offsetX + offsetY
-            end
-        end
+    if math.random() < 0.3 then
+        local randomAngleX = (math.random() - 0.5) * maxAngle
+        local randomAngleY = (math.random() - 0.5) * maxAngle
+        
+        local rightVector = Camera.CFrame.RightVector
+        local upVector = Camera.CFrame.UpVector
+        
+        local offsetX = rightVector * math.sin(randomAngleX) * distance * 0.1
+        local offsetY = upVector * math.sin(randomAngleY) * distance * 0.1
+        
+        local curvedPosition = targetPosition + offsetX + offsetY
+        
+        angleData.angle = actualAngleDegrees
+        angleData.distance = distance
+        
+        return curvedPosition
+    else
+        angleData.angle = actualAngleDegrees
+        angleData.distance = distance
+        return targetPosition
     end
-    
-    return targetPosition
 end
 
 local function getSilentValidPlayers()
@@ -747,11 +753,68 @@ local function initializeSilentAim()
     
     SilentAimInstance.connections = {}
     
+    local lastPrintTime = 0
+    
     local renderConnection = RunService.RenderStepped:Connect(function()
         if silentFov then
             silentFov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
             silentFov:SetVisible(Toggles.SilentFOVVisible.Value)
             silentFov:SetRadius(Options.SilentFOV.Value)
+        end
+        
+        if Toggles.VisualizeAntiCurve.Value and Toggles.SilentAimEnabled.Value then
+            local currentTime = tick()
+            if currentTime - lastPrintTime > 0.1 then
+                local maxAngle = Options.MaxAngle.Value
+                local currentAngle = angleData.angle
+                local distance = angleData.distance
+                local target = nil
+                local targetPart = nil
+                
+                local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+                if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+                    target = dummy
+                    targetPart = dummy.Head or dummy.HumanoidRootPart
+                else
+                    local validPlayers = getSilentValidPlayers()
+                    local closestDist = math.huge
+                    
+                    for _, playerData in pairs(validPlayers) do
+                        local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
+                        
+                        if onScreen then
+                            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                            if dist < closestDist then
+                                closestDist = dist
+                                target = playerData.character
+                                targetPart = playerData.targetPart
+                            end
+                        end
+                    end
+                end
+                
+                if target and targetPart then
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                    local screenDist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    
+                    if onScreen and screenDist <= Options.SilentFOV.Value then
+                        local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                        local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
+                        local crosshairDir = crosshairRay.Direction
+                        
+                        local dot = crosshairDir:Dot(targetDir)
+                        local angle = math.acos(math.clamp(dot, -1, 1))
+                        local angleDeg = math.deg(angle)
+                        
+                        local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                        local realDist = (targetPart.Position - charPos).Magnitude
+                        
+                        print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, maxAngle, tostring(angleDeg <= maxAngle)))
+                    end
+                end
+                
+                lastPrintTime = currentTime
+            end
         end
     end)
     
@@ -869,8 +932,34 @@ local function initializeSilentAim()
                     local zPred = xPred
                     
                     local predicted = targetPart.CFrame + (targetPart.AssemblyLinearVelocity * Vector3.new(xPred, yPred, zPred))
-                    local finalPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
-                    return CFrame.new(finalPos)
+                    
+                    if Toggles.AntiCurveEnabled.Value then
+                        local crosshairRay = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                        local targetDir = (targetPart.Position - Camera.CFrame.Position).Unit
+                        local crosshairDir = crosshairRay.Direction
+                        
+                        local dot = crosshairDir:Dot(targetDir)
+                        local angle = math.acos(math.clamp(dot, -1, 1))
+                        local angleDeg = math.deg(angle)
+                        
+                        local charPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart') and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                        local dist = (targetPart.Position - charPos).Magnitude
+                        
+                        if Toggles.VisualizeAntiCurve.Value then
+                            print(string.format("TARGETING - Angle: %.1f° | Max: %.1f° | Within limit: %s", angleDeg, Options.MaxAngle.Value, tostring(angleDeg <= Options.MaxAngle.Value)))
+                        end
+                        
+                        if angleDeg <= Options.MaxAngle.Value then
+                            if dist <= Options.DistanceThreshold.Value then
+                                local curvedPos = applyAntiCurve(predicted.Position, Camera.CFrame.Position)
+                                return CFrame.new(curvedPos)
+                            else
+                                return CFrame.new(predicted.Position)
+                            end
+                        end
+                    else
+                        return CFrame.new(predicted.Position)
+                    end
                 else
                     if silentTracer then
                         silentTracer.Visible = false
