@@ -32,6 +32,8 @@ local CoreGui = game:GetService('CoreGui')
 local AimAssistInstance = {}
 local AimAssistEnabled = false
 local fov = nil
+local cachedTargets = {}
+local lastCacheUpdate = 0
 
 LeftGroupBox:AddToggle('AimAssistEnabled', {
     Text = 'Aim Assist',
@@ -110,6 +112,15 @@ SmoothingGroupBox:AddSlider('YSmoothing', {
     Max = 10,
     Rounding = 1,
     Tooltip = 'Y-axis smoothing strength (for air targets)'
+})
+
+SmoothingGroupBox:AddSlider('CacheInterval', {
+    Text = 'Cache Update Rate',
+    Default = 0.5,
+    Min = 0.1,
+    Max = 2,
+    Rounding = 1,
+    Tooltip = 'How often to scan for new targets (lower = more responsive but heavier)'
 })
 
 -- removed ZSmoothing
@@ -193,7 +204,6 @@ end
 local function getClosestPart(character)
     if not character then return nil end
     
-    local parts = {}
     local bodyParts = {
         'Head', 'HumanoidRootPart',
         'UpperTorso', 'LowerTorso',
@@ -202,23 +212,20 @@ local function getClosestPart(character)
         'LeftFoot', 'RightFoot', 'LeftHand', 'RightHand'
     }
     
+    local closestPart = nil
+    local closestDist = math.huge
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    
     for _, partName in pairs(bodyParts) do
         local part = character:FindFirstChild(partName)
         if part then
-            table.insert(parts, part)
-        end
-    end
-    
-    local closestPart = nil
-    local closestDist = math.huge
-    
-    for _, part in pairs(parts) do
-        local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-        if onScreen then
-            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-            if dist < closestDist then
-                closestDist = dist
-                closestPart = part
+            local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+            if onScreen then
+                local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closestPart = part
+                end
             end
         end
     end
@@ -229,52 +236,70 @@ end
 local function isInAir(character)
     if not character or not character:FindFirstChild('HumanoidRootPart') then return false end
     local rootPart = character.HumanoidRootPart
-    local raycast = workspace:Raycast(rootPart.Position, Vector3.new(0, -10, 0))
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {character, LocalPlayer.Character}
+    local raycast = workspace:Raycast(rootPart.Position, Vector3.new(0, -10, 0), rayParams)
     return raycast == nil
 end
 
 -- removed humanizer logic
 
-local function getValidPlayers()
-    local validPlayers = {}
-    local seen = {}
+local function updateTargetCache()
+    cachedTargets = {}
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local character = player.Character
             local humanoid = character:FindFirstChild('Humanoid')
             local rootPart = character:FindFirstChild('HumanoidRootPart')
-            if humanoid and rootPart and humanoid.Health > 0 then
-                local targetPart = nil
-                if Toggles.ClosestMode.Value then
-                    targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
-                else
-                    targetPart = character:FindFirstChild(Options.HitPart.Value) or (character:FindFirstChild('Head') or rootPart)
-                end
-                if targetPart then
-                    table.insert(validPlayers, { player = player, character = character, targetPart = targetPart })
-                    seen[character] = true
-                end
+            if humanoid and rootPart then
+                table.insert(cachedTargets, { player = player, character = character })
             end
         end
     end
     
     for _, inst in ipairs(workspace:GetDescendants()) do
-        if inst:IsA('Model') and not seen[inst] then
+        if inst:IsA('Model') then
             local humanoid = inst:FindFirstChildOfClass('Humanoid')
             local rootPart = inst:FindFirstChild('HumanoidRootPart')
-            if humanoid and rootPart and humanoid.Health > 0 then
+            if humanoid and rootPart then
                 if not (LocalPlayer.Character and inst == LocalPlayer.Character) then
-                    local targetPart = nil
-                    if Toggles.ClosestMode.Value then
-                        targetPart = getClosestPart(inst) or (inst:FindFirstChild('Head') or rootPart)
-                    else
-                        targetPart = inst:FindFirstChild(Options.HitPart.Value) or (inst:FindFirstChild('Head') or rootPart)
+                    local isPlayer = false
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player.Character == inst then
+                            isPlayer = true
+                            break
+                        end
                     end
-                    if targetPart then
-                        table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
-                        seen[inst] = true
+                    if not isPlayer then
+                        table.insert(cachedTargets, { player = nil, character = inst })
                     end
+                end
+            end
+        end
+    end
+end
+
+local function getValidPlayers()
+    local validPlayers = {}
+    local closestMode = Toggles.ClosestMode.Value
+    local hitPartValue = Options.HitPart.Value
+    
+    for _, targetData in pairs(cachedTargets) do
+        local character = targetData.character
+        if character and character.Parent then
+            local humanoid = character:FindFirstChild('Humanoid')
+            local rootPart = character:FindFirstChild('HumanoidRootPart')
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local targetPart = nil
+                if closestMode then
+                    targetPart = getClosestPart(character) or (character:FindFirstChild('Head') or rootPart)
+                else
+                    targetPart = character:FindFirstChild(hitPartValue) or (character:FindFirstChild('Head') or rootPart)
+                end
+                if targetPart then
+                    table.insert(validPlayers, { player = targetData.player, character = character, targetPart = targetPart })
                 end
             end
         end
@@ -306,11 +331,22 @@ local function initializeAimAssist()
     
     AimAssistInstance.connections = {}
     
+    local lastFOVRadius = Options.FOV.Value
+    local lastFOVVisible = Toggles.FOVVisible.Value
+    
     local renderConnection = RunService.RenderStepped:Connect(function()
         if fov then
             fov:SetPosition(Vector2.new(Mouse.X, Mouse.Y))
-            fov:SetVisible(Toggles.FOVVisible.Value)
-            fov:SetRadius(Options.FOV.Value)
+            local currentVisible = Toggles.FOVVisible.Value
+            local currentRadius = Options.FOV.Value
+            if currentVisible ~= lastFOVVisible then
+                fov:SetVisible(currentVisible)
+                lastFOVVisible = currentVisible
+            end
+            if currentRadius ~= lastFOVRadius then
+                fov:SetRadius(currentRadius)
+                lastFOVRadius = currentRadius
+            end
         end
     end)
     
@@ -346,19 +382,41 @@ local function initializeAimAssist()
     table.insert(AimAssistInstance.connections, inputBeganConnection)
     table.insert(AimAssistInstance.connections, inputEndedConnection)
 
+    updateTargetCache()
+    
+    local playerAddedConnection = Players.PlayerAdded:Connect(function()
+        task.wait(1)
+        updateTargetCache()
+    end)
+    
+    local playerRemovingConnection = Players.PlayerRemoving:Connect(function()
+        updateTargetCache()
+    end)
+    
+    table.insert(AimAssistInstance.connections, playerAddedConnection)
+    table.insert(AimAssistInstance.connections, playerRemovingConnection)
+    
     local aimConnection = RunService.Heartbeat:Connect(function(dt)
         if not (AimAssistEnabled or AimHold) then return end
+        
+        local currentTime = tick()
+        if currentTime - lastCacheUpdate > Options.CacheInterval.Value then
+            updateTargetCache()
+            lastCacheUpdate = currentTime
+        end
         
         local validPlayers = getValidPlayers()
         local closestDist = math.huge
         local bestPart = nil
         local bestCharacter = nil
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+        local fovValue = Options.FOV.Value
         
         for _, playerData in pairs(validPlayers) do
             local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
             if onScreen then
-                local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < closestDist and dist <= Options.FOV.Value then
+                local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                if dist < closestDist and dist <= fovValue then
                     closestDist = dist
                     bestPart = playerData.targetPart
                     bestCharacter = playerData.character
@@ -394,8 +452,11 @@ end
 
 Toggles.AimAssistEnabled:OnChanged(function()
     if Toggles.AimAssistEnabled.Value then
+        cachedTargets = {}
+        lastCacheUpdate = 0
         initializeAimAssist()
     else
+        cachedTargets = {}
         if AimAssistInstance.fov then
             AimAssistInstance.fov:Remove()
         end
