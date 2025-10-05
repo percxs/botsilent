@@ -18,9 +18,9 @@ local Tabs = {
 }
 
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist')
+local RightGroupBox = Tabs.Main:AddRightGroupbox('Silent Aim')
 local LeftGroupBox2 = Tabs.Main:AddLeftGroupbox('Aim Assist Prediction')
 local LeftGroupBox3 = Tabs.Main:AddLeftGroupbox('Aim Assist Smoothing')
-local RightGroupBox = Tabs.Main:AddRightGroupbox('Silent Aim')
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
