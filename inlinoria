@@ -1,8 +1,47 @@
 local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 
+print("DEBUG: Loading LinoriaLib...")
 local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+print("DEBUG: LinoriaLib loaded successfully")
+
+print("DEBUG: Loading ThemeManager...")
 local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+print("DEBUG: ThemeManager loaded successfully")
+
+print("DEBUG: Loading SaveManager...")
 local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+print("DEBUG: SaveManager loaded successfully")
+
+-- Access global tables created by LinoriaLib
+local Toggles = _G.Toggles
+local Options = _G.Options
+
+-- Debug: Check if tables exist
+print("DEBUG: Toggles exists:", Toggles ~= nil)
+print("DEBUG: Options exists:", Options ~= nil)
+if Toggles then
+    print("DEBUG: Toggles type:", type(Toggles))
+end
+if Options then
+    print("DEBUG: Options type:", type(Options))
+end
+
+-- Missing function definitions that are typically from external libraries
+local function hookmetamethod(obj, method, hook)
+    local mt = getrawmetatable(obj)
+    local old = mt[method]
+    mt[method] = hook
+    return old
+end
+
+local function restoremetamethod(obj, method, original)
+    local mt = getrawmetatable(obj)
+    mt[method] = original
+end
+
+local function gethui()
+    return game:GetService("CoreGui")
+end
 
 local gameName = game:GetService('MarketplaceService'):GetProductInfo(game.PlaceId).Name
 
@@ -88,12 +127,30 @@ LeftGroupBox:AddToggle('AimAssistEnabled', {
     Tooltip = 'Enable/disable aim assist functionality'
 })
 
-Toggles.AimAssistEnabled:AddKeyPicker('AimKey', {
-    Default = 'C',
-    Mode = 'Toggle',
-    Text = 'Aim Assist',
-    NoUI = false,
-})
+-- Debug: Check if toggle was created
+print("DEBUG: AimAssistEnabled toggle created:", Toggles.AimAssistEnabled ~= nil)
+if Toggles.AimAssistEnabled then
+    print("DEBUG: AimAssistEnabled type:", type(Toggles.AimAssistEnabled))
+end
+
+-- Debug: Check before adding key picker
+print("DEBUG: About to add key picker to AimAssistEnabled")
+if Toggles.AimAssistEnabled then
+    print("DEBUG: AimAssistEnabled has AddKeyPicker:", type(Toggles.AimAssistEnabled.AddKeyPicker) == "function")
+    if Toggles.AimAssistEnabled.AddKeyPicker then
+        Toggles.AimAssistEnabled:AddKeyPicker('AimKey', {
+            Default = 'C',
+            Mode = 'Toggle',
+            Text = 'Aim Assist',
+            NoUI = false,
+        })
+        print("DEBUG: Key picker added successfully")
+    else
+        print("ERROR: AimAssistEnabled does not have AddKeyPicker method")
+    end
+else
+    print("ERROR: Toggles.AimAssistEnabled is nil")
+end
 
 LeftGroupBox:AddSlider('FOV', {
     Text = 'FOV',
@@ -103,6 +160,13 @@ LeftGroupBox:AddSlider('FOV', {
     Rounding = 0,
     Tooltip = 'Field of view for target detection'
 })
+
+-- Debug: Check if FOV slider was created
+print("DEBUG: FOV slider created:", Options.FOV ~= nil)
+if Options.FOV then
+    print("DEBUG: FOV type:", type(Options.FOV))
+    print("DEBUG: FOV has Value:", Options.FOV.Value ~= nil)
+end
 
 LeftGroupBox:AddToggle('FOVVisible', {
     Text = 'FOV Visible',
@@ -606,7 +670,7 @@ local function initializeAimAssist()
         local mousePos = Vector2.new(Mouse.X, Mouse.Y)
         
         for _, playerData in pairs(validPlayers) do
-            local fovValue = Options.FOV and Options.FOV.Value or 500
+            local fovValue = Options.FOV.Value
             if isTargetInFOV(playerData.targetPart.Position, fovValue) then
                 local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
                 if onScreen then
@@ -638,8 +702,16 @@ local function initializeAimAssist()
     end
     
     local function getKeyState()
+        print("DEBUG: getKeyState called")
+        print("DEBUG: Options.AimKey exists:", Options.AimKey ~= nil)
+        if not Options.AimKey then
+            print("ERROR: Options.AimKey is nil in getKeyState")
+            return false
+        end
+        
         local mode = Options.AimKey.Mode
         local key = Options.AimKey.Value
+        print("DEBUG: mode:", mode, "key:", key)
         
         if mode == 'Always' then
             return true
@@ -728,7 +800,9 @@ local function initializeAimAssist()
 end
 
 Toggles.AimAssistEnabled:OnChanged(function()
-    if Toggles.AimAssistEnabled.Value then
+    print("DEBUG: AimAssistEnabled OnChanged called")
+    print("DEBUG: Toggles.AimAssistEnabled exists:", Toggles.AimAssistEnabled ~= nil)
+    if Toggles.AimAssistEnabled and Toggles.AimAssistEnabled.Value then
         LockedTarget = nil
         initializeAimAssist()
     else
@@ -744,7 +818,7 @@ Toggles.AimAssistEnabled:OnChanged(function()
             end
         end
         if AimAssistInstance.hook then
-            restoremetamethod(game, '__index', AimAssistInstance.hook)
+            hookmetamethod(game, '__index', AimAssistInstance.hook)
         end
     end
 end)
@@ -879,7 +953,7 @@ local function initializeSilentAim()
                 targetPart = dummy:FindFirstChild(Options.SilentHitPart.Value) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
             end
             if targetPart then
-                local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+                local fovValue = Options.SilentFOV.Value
                 if isTargetInFOV(targetPart.Position, fovValue) then
                     return { character = dummy, targetPart = targetPart }
                 end
@@ -891,7 +965,7 @@ local function initializeSilentAim()
         local bestTarget = nil
         
         for _, playerData in pairs(validPlayers) do
-            local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+            local fovValue = Options.SilentFOV.Value
             if isTargetInFOV(playerData.targetPart.Position, fovValue) then
                 local screenPos, onScreen = Camera:WorldToScreenPoint(playerData.targetPart.Position)
                 if onScreen then
@@ -1015,7 +1089,7 @@ local function initializeSilentAim()
                 end
             elseif Options.TargetMode.Value == 'Target' then
                 if SilentLockedTarget then
-                    local fovValue = Options.SilentFOV and Options.SilentFOV.Value or 1000
+                    local fovValue = Options.SilentFOV.Value
                     if isTargetInFOV(SilentLockedTarget.targetPart.Position, fovValue) then
                             target = SilentLockedTarget.character
                             targetPart = SilentLockedTarget.targetPart
@@ -1115,7 +1189,7 @@ Library:OnUnload(function()
         end
     end
     if AimAssistInstance and AimAssistInstance.hook then
-        restoremetamethod(game, '__index', AimAssistInstance.hook)
+        hookmetamethod(game, '__index', AimAssistInstance.hook)
     end
     if SilentAimInstance and SilentAimInstance.fov then
         SilentAimInstance.fov:Remove()
@@ -1144,6 +1218,7 @@ MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { Default = 'End', N
 
 Library.ToggleKeybind = Options.MenuKeybind
 
+print("DEBUG: Configuring ThemeManager and SaveManager...")
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
@@ -1153,3 +1228,4 @@ SaveManager:SetFolder('AimAssistScript/game')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
+print("DEBUG: ThemeManager and SaveManager configured successfully")
