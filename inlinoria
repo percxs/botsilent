@@ -467,25 +467,16 @@ local function initializeAimAssist()
         local velocity = targetPart.AssemblyLinearVelocity
         local predictedPos = targetPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
         
-        local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
-        if not onScreen then return end
-        
-        local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
-        local currentMousePos = Vector2.new(Mouse.X, Mouse.Y)
-        
-        local deltaX = targetScreenPos.X - currentMousePos.X
-        local deltaY = targetScreenPos.Y - currentMousePos.Y
+        local currentCam = Camera.CFrame
+        local targetCFrame = CFrame.new(currentCam.Position, predictedPos)
         
         local xSmooth = Options.XSmoothing.Value
         local ySmooth = Options.YSmoothing.Value
+        local avgSmooth = (xSmooth + ySmooth) * 0.5
         
-        local moveX = deltaX / math.max(0.1, xSmooth)
-        local moveY = deltaY / math.max(0.1, ySmooth)
+        local smoothness = math.clamp(dt * (10 / math.max(0.1, avgSmooth)), 0, 1)
         
-        mousemoverel = mousemoverel or (syn and syn.mouse_move) or nil
-        if mousemoverel then
-            mousemoverel(moveX, moveY)
-        end
+        Camera.CFrame = currentCam:Lerp(targetCFrame, smoothness)
     end)
     
     table.insert(AimAssistInstance.connections, aimConnection)
