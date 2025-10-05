@@ -17,9 +17,10 @@ local Tabs = {
     ['UI Settings'] = Window:AddTab('UI Settings'),
 }
 
-local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
+local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Aim Assist')
 local LeftGroupBox2 = Tabs.Main:AddLeftGroupbox('Aim Assist Prediction')
 local LeftGroupBox3 = Tabs.Main:AddLeftGroupbox('Aim Assist Smoothing')
+local RightGroupBox = Tabs.Main:AddRightGroupbox('Silent Aim')
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
@@ -86,13 +87,56 @@ LeftGroupBox:AddToggle('WallCheck', {
     Tooltip = 'Only target visible players, stop aiming when target goes behind wall'
 })
 
-LeftGroupBox:AddToggle('AntiCurveEnabled', {
+RightGroupBox:AddToggle('SilentAimEnabled', {
+    Text = 'Enabled',
+    Default = false,
+    Tooltip = 'Enable/disable silent aim functionality'
+})
+
+RightGroupBox:AddSlider('SilentFOV', {
+    Text = 'FOV',
+    Default = 1000,
+    Min = 100,
+    Max = 2000,
+    Rounding = 0,
+    Tooltip = 'Field of view for silent aim'
+})
+
+RightGroupBox:AddToggle('SilentFOVVisible', {
+    Text = 'FOV Visible',
+    Default = false,
+    Tooltip = 'Show silent aim FOV circle'
+})
+
+RightGroupBox:AddSlider('SilentPrediction', {
+    Text = 'Prediction',
+    Default = 0.0223,
+    Min = 0,
+    Max = 0.75,
+    Rounding = 4,
+    Tooltip = 'Silent aim prediction value'
+})
+
+RightGroupBox:AddDropdown('SilentHitPart', {
+    Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'},
+    Default = 1,
+    Text = 'Hit Part',
+    Tooltip = 'Target body part for silent aim'
+})
+
+RightGroupBox:AddToggle('SilentClosestMode', {
+    Text = 'Closest Mode',
+    Default = false,
+    Tooltip = 'Target closest body part instead of specific part'
+})
+
+RightGroupBox:AddToggle('AntiCurveEnabled', {
     Text = 'Anti Curve',
     Default = false,
     Tooltip = 'Enable anti-curve / resolver functionality'
 })
 
-LeftGroupBox:AddSlider('MaxAngle', {
+RightGroupBox:AddSlider('MaxAngle', {
     Text = 'Max Angle',
     Default = 7.67,
     Min = 0,
@@ -101,7 +145,7 @@ LeftGroupBox:AddSlider('MaxAngle', {
     Tooltip = 'Maximum angle for anti-curve'
 })
 
-LeftGroupBox:AddSlider('DistanceThreshold', {
+RightGroupBox:AddSlider('DistanceThreshold', {
     Text = 'Distance Threshold',
     Default = 50,
     Min = 10,
@@ -110,7 +154,7 @@ LeftGroupBox:AddSlider('DistanceThreshold', {
     Tooltip = 'Distance threshold for anti-curve activation'
 })
 
-LeftGroupBox:AddToggle('VisualizeAntiCurve', {
+RightGroupBox:AddToggle('VisualizeAntiCurve', {
     Text = 'Visualize Anti Curve',
     Default = false,
     Tooltip = 'Show anti-curve debug information'
