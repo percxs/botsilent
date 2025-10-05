@@ -109,20 +109,20 @@ RightGroupBox:AddSlider('YPrediction', {
 
 SmoothingGroupBox:AddSlider('XSmoothing', {
     Text = 'X Smoothing',
-    Default = 1,
+    Default = 0.5,
     Min = 0.1,
-    Max = 10,
-    Rounding = 1,
-    Tooltip = 'X-axis smoothing strength'
+    Max = 1,
+    Rounding = 2,
+    Tooltip = '1.0 = sharpest, 0.1 = smoothest'
 })
 
 SmoothingGroupBox:AddSlider('YSmoothing', {
     Text = 'Y Smoothing',
-    Default = 1,
+    Default = 0.5,
     Min = 0.1,
-    Max = 10,
-    Rounding = 1,
-    Tooltip = 'Y-axis smoothing strength (for air targets)'
+    Max = 1,
+    Rounding = 2,
+    Tooltip = '1.0 = sharpest, 0.1 = smoothest'
 })
 
 -- removed ZSmoothing
@@ -532,7 +532,7 @@ local function initializeAimAssist()
         local ySmooth = Options.YSmoothing.Value
         local avgSmooth = (xSmooth + ySmooth) * 0.5
         
-        local smoothness = math.clamp(dt * (10 / math.max(0.1, avgSmooth)), 0, 1)
+        local smoothness = math.clamp(avgSmooth, 0, 1)
         
         Camera.CFrame = currentCam:Lerp(targetCFrame, smoothness)
     end)
