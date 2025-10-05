@@ -18,7 +18,6 @@ local Tabs = {
 }
 
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Main Settings')
-local RightGroupBox = Tabs.Main:AddRightGroupbox('Advanced Settings')
 local AntiCurveGroupBox = Tabs.Main:AddLeftGroupbox('Anti Curve')
 
 local Players = game:GetService('Players')
@@ -82,13 +81,13 @@ LeftGroupBox:AddLabel('Aim Key'):AddKeyPicker('AimKey', {
     NoUI = false,
 })
 
-RightGroupBox:AddToggle('AntiCurveEnabled', {
+AntiCurveGroupBox:AddToggle('AntiCurveEnabled', {
     Text = 'Anti Curve',
     Default = false,
     Tooltip = 'Enable anti-curve to avoid detection'
 })
 
-RightGroupBox:AddSlider('AntiCurveMaxAngle', {
+AntiCurveGroupBox:AddSlider('AntiCurveMaxAngle', {
     Text = 'Max Angle',
     Default = 7.67,
     Min = 1,
@@ -97,7 +96,7 @@ RightGroupBox:AddSlider('AntiCurveMaxAngle', {
     Tooltip = 'Maximum angle for anti-curve'
 })
 
-RightGroupBox:AddSlider('AntiCurveDistanceThreshold', {
+AntiCurveGroupBox:AddSlider('AntiCurveDistanceThreshold', {
     Text = 'Distance Threshold',
     Default = 50,
     Min = 10,
@@ -106,7 +105,7 @@ RightGroupBox:AddSlider('AntiCurveDistanceThreshold', {
     Tooltip = 'Distance threshold for anti-curve'
 })
 
-RightGroupBox:AddToggle('AntiCurveVisualize', {
+AntiCurveGroupBox:AddToggle('AntiCurveVisualize', {
     Text = 'Visualize',
     Default = false,
     Tooltip = 'Show anti-curve visualization'
