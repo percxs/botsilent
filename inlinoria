@@ -351,32 +351,17 @@ local function getValidPlayers()
     end
     
     if Toggles.IncludeNPCs.Value then
-        for _, inst in ipairs(workspace:GetDescendants()) do
-            if inst:IsA('Model') and inst ~= LocalPlayer.Character then
-                local isPlayer = false
-                for _, player in pairs(Players:GetPlayers()) do
-                    if player.Character == inst then
-                        isPlayer = true
-                        break
-                    end
-                end
-                
-                if not isPlayer then
-                    local humanoid = inst:FindFirstChildOfClass('Humanoid')
-                    local rootPart = inst:FindFirstChild('HumanoidRootPart')
-                    if humanoid and rootPart and humanoid.Health > 0 then
-                        local targetPart = nil
-                        if closestMode then
-                            targetPart = getClosestPart(inst) or (inst:FindFirstChild('Head') or rootPart)
-                        else
-                            targetPart = inst:FindFirstChild(hitPartValue) or (inst:FindFirstChild('Head') or rootPart)
-                        end
-                        if targetPart then
-                            if not Toggles.WallCheck.Value or isVisible(targetPart, inst) then
-                                table.insert(validPlayers, { player = nil, character = inst, targetPart = targetPart })
-                            end
-                        end
-                    end
+        local dummy = workspace:FindFirstChild('Bots') and workspace.Bots:FindFirstChild('Dummy')
+        if dummy and dummy:FindFirstChild('HumanoidRootPart') and dummy:FindFirstChild('Humanoid') and dummy.Humanoid.Health > 0 then
+            local targetPart = nil
+            if closestMode then
+                targetPart = getClosestPart(dummy) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            else
+                targetPart = dummy:FindFirstChild(hitPartValue) or (dummy:FindFirstChild('Head') or dummy.HumanoidRootPart)
+            end
+            if targetPart then
+                if not Toggles.WallCheck.Value or isVisible(targetPart, dummy) then
+                    table.insert(validPlayers, { player = nil, character = dummy, targetPart = targetPart })
                 end
             end
         end
