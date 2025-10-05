@@ -206,6 +206,7 @@ end
 local function getClosestPart(character)
     if not character then return nil end
     
+    local parts = {}
     local bodyParts = {
         'Head', 'HumanoidRootPart',
         'UpperTorso', 'LowerTorso',
@@ -214,20 +215,23 @@ local function getClosestPart(character)
         'LeftFoot', 'RightFoot', 'LeftHand', 'RightHand'
     }
     
-    local closestPart = nil
-    local closestDist = math.huge
-    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-    
     for _, partName in pairs(bodyParts) do
         local part = character:FindFirstChild(partName)
         if part then
-            local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-            if onScreen then
-                local dist = (mousePos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closestPart = part
-                end
+            table.insert(parts, part)
+        end
+    end
+    
+    local closestPart = nil
+    local closestDist = math.huge
+    
+    for _, part in pairs(parts) do
+        local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+        if onScreen then
+            local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestPart = part
             end
         end
     end
