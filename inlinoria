@@ -438,6 +438,8 @@ local function initializeAimAssist()
     end
     
     Options.AimKey:OnClick(function()
+        if Options.AimKey.Mode ~= 'Toggle' then return end
+        
         if not AimAssistActive then
             LockedTarget = findClosestTarget()
             if LockedTarget then
@@ -456,6 +458,8 @@ local function initializeAimAssist()
     end)
     
     Options.AimKey:OnChanged(function()
+        if Options.AimKey.Mode == 'Toggle' then return end
+        
         if Options.AimKey.Active then
             LockedTarget = findClosestTarget()
             if LockedTarget then
