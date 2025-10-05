@@ -101,7 +101,7 @@ RightGroupBox:AddSlider('YPrediction', {
     Min = 0,
     Max = 0.1,
     Rounding = 4,
-    Tooltip = 'Y-axis bullet prediction value (for air targets)'
+    Tooltip = 'Y-axis bullet prediction value'
 })
 
 -- removed ZPrediction
@@ -121,7 +121,7 @@ SmoothingGroupBox:AddSlider('YSmoothing', {
     Min = 0.01,
     Max = 1,
     Rounding = 2,
-    Tooltip = '1.0 = sharpest, 0.01 = smoothest'
+    Tooltip = '1.0 = sharpest, 0.01 = smoothest (for air targets)'
 })
 
 -- removed ZSmoothing
@@ -506,9 +506,10 @@ local function initializeAimAssist()
         local inAir = isInAir(targetChar)
         local xPred = Options.XPrediction.Value
         local yPred = inAir and Options.YPrediction.Value or 0
+        local zPred = (xPred + Options.YPrediction.Value) * 0.5
         
         local velocity = targetPart.AssemblyLinearVelocity
-        local predictedPos = targetPart.Position + Vector3.new(velocity.X * xPred, velocity.Y * yPred, 0)
+        local predictedPos = targetPart.Position + (velocity * Vector3.new(xPred, yPred, zPred))
         
         local currentCam = Camera.CFrame
         local targetCFrame = CFrame.new(currentCam.Position, predictedPos)
