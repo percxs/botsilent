@@ -105,6 +105,12 @@ RightGroupBox:AddDropdown('TargetMode', {
     Tooltip = 'Auto = targets based on mouse/FOV | Target = requires key press'
 })
 
+RightGroupBox:AddToggle('TargetTracer', {
+    Text = 'Target Tracer',
+    Default = false,
+    Tooltip = 'Show line from mouse to target'
+})
+
 RightGroupBox:AddSlider('SilentFOV', {
     Text = 'FOV',
     Default = 1000,
@@ -670,9 +676,6 @@ SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
 
-
-print("[DEBUG] RightGroupBox exists:", RightGroupBox ~= nil)
-print("[DEBUG] RightGroupBox type:", typeof(RightGroupBox))
 
 -- loadstring(game:HttpGet('https://raw.githubusercontent.com/percxs/botsilent/refs/heads/main/inlinoria'))()
     
